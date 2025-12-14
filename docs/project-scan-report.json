@@ -1,0 +1,97 @@
+{
+    "workflow_version": "1.2.0",
+    "timestamps": {
+        "started": "2025-12-14T12:55:08+04:00",
+        "completed": "2025-12-14T13:02:00+04:00"
+    },
+    "mode": "initial_scan",
+    "scan_level": "exhaustive",
+    "project_root": "/Users/moe/NeuralDeckProjects",
+    "output_folder": "/Users/moe/NeuralDeckProjects/docs",
+    "completed_steps": [
+        {
+            "step": "step_1",
+            "status": "completed",
+            "summary": "Classified as monolith with 1 parts"
+        },
+        {
+            "step": "step_2",
+            "status": "completed",
+            "summary": "Found 3 existing docs"
+        },
+        {
+            "step": "step_3",
+            "status": "completed",
+            "summary": "Analyzed tech stack"
+        },
+        {
+            "step": "step_4",
+            "status": "completed",
+            "summary": "Generated Architecture Overview and Index"
+        },
+        {
+            "step": "step_5",
+            "status": "completed",
+            "summary": "Generated API Endpoints Documentation"
+        }
+    ],
+    "current_step": "completed",
+    "findings": {
+        "project_classification": {
+            "repository_type": "monolith",
+            "parts_count": 1,
+            "primary_tech": "React + Express"
+        },
+        "project_types": [
+            {
+                "part_id": "root",
+                "project_type_id": "web",
+                "display_name": "Web Application"
+            }
+        ],
+        "existing_docs": [
+            {
+                "path": "README.md",
+                "type": "readme",
+                "part_id": "root"
+            },
+            {
+                "path": "docs/prd.md",
+                "type": "prd",
+                "part_id": "root"
+            },
+            {
+                "path": "docs/bmm-workflow-status.yaml",
+                "type": "workflow_status",
+                "part_id": "root"
+            }
+        ],
+        "tech_stack": {
+            "frontend": [
+                "React",
+                "Vite",
+                "Tailwind CSS",
+                "Framer Motion",
+                "Lucide React",
+                "ReactFlow"
+            ],
+            "backend": [
+                "Express",
+                "Helmet",
+                "Compression",
+                "Rate Limit"
+            ],
+            "tools": [
+                "Bmad/NeuralDeck",
+                "Ollama/vLLM Proxy"
+            ]
+        }
+    },
+    "outputs_generated": [
+        "project-scan-report.json",
+        "index.md",
+        "architecture_overview.md",
+        "api_endpoints.md"
+    ],
+    "resume_instructions": "Workflow Completed"
+}

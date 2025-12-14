@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "position": {
+        "x": 100,
+        "y": 100
+      },
+      "data": {
+        "label": "Input"
+      },
+      "type": "input",
+      "width": 150,
+      "height": 40
+    },
+    {
+      "id": "2",
+      "position": {
+        "x": 228.8327249022164,
+        "y": 96.41173402868318
+      },
+      "data": {
+        "label": "Analyst",
+        "agentId": "analyst"
+      },
+      "type": "custom",
+      "width": 217,
+      "height": 66,
+      "selected": true,
+      "positionAbsolute": {
+        "x": 228.8327249022164,
+        "y": 96.41173402868318
+      },
+      "dragging": false
+    },
+    {
+      "id": "vjctkd4p2",
+      "type": "custom",
+      "position": {
+        "x": 182.61166883963492,
+        "y": 3.224380704041707
+      },
+      "data": {
+        "label": "Red Teamer",
+        "agentId": "red_teamer"
+      },
+      "width": 261,
+      "height": 66
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1-2",
+      "source": "1",
+      "target": "2"
+    },
+    {
+      "source": "1",
+      "sourceHandle": null,
+      "target": "vjctkd4p2",
+      "targetHandle": null,
+      "id": "reactflow__edge-1-vjctkd4p2"
+    },
+    {
+      "source": "vjctkd4p2",
+      "sourceHandle": null,
+      "target": "2",
+      "targetHandle": null,
+      "id": "reactflow__edge-vjctkd4p2-2"
+    }
+  ]
+}

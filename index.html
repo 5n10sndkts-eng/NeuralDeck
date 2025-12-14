@@ -1,0 +1,157 @@
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeuralDeck</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.10.1/dist/style.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              cyber: {
+                black: '#050505',
+                dark: '#0a0a0a',
+                panel: '#0f0f14',
+                cyan: '#00f0ff', // Primary
+                purple: '#bc13fe', // Secondary
+                red: '#ff003c', // Danger
+                green: '#0aff0a', // Success
+                dim: 'rgba(255,255,255,0.05)',
+              }
+            },
+            fontFamily: {
+              mono: ['"Fira Code"', 'monospace'],
+              sans: ['"Inter"', 'sans-serif'],
+            },
+            animation: {
+              'spin-slow': 'spin 4s linear infinite',
+              'scan': 'scan 4s linear infinite',
+              'glitch': 'glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite',
+              'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+              scan: {
+                '0%': { transform: 'translateY(-100%)' },
+                '100%': { transform: 'translateY(100%)' }
+              },
+              glitch: {
+                '0%': { transform: 'translate(0)' },
+                '20%': { transform: 'translate(-2px, 2px)' },
+                '40%': { transform: 'translate(-2px, -2px)' },
+                '60%': { transform: 'translate(2px, 2px)' },
+                '80%': { transform: 'translate(2px, -2px)' },
+                '100%': { transform: 'translate(0)' }
+              }
+            },
+            backgroundImage: {
+              'grid-pattern': "linear-gradient(to right, #1a1a1a 1px, transparent 1px), linear-gradient(to bottom, #1a1a1a 1px, transparent 1px)",
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #050505;
+        color: #e0e0e0;
+        overflow: hidden;
+      }
+
+      /* The Grid Background - Perspective Illusion */
+      .cyber-grid-bg {
+        background-size: 50px 50px;
+        background-image: 
+          linear-gradient(to right, rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+        mask-image: radial-gradient(circle at 50% 50%, black 40%, transparent 100%);
+        position: fixed;
+        inset: -50%;
+        width: 200%;
+        height: 200%;
+        transform: perspective(1000px) rotateX(20deg) translateY(-100px) scale(1.5);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* Digital Noise Texture */
+      .digital-noise {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.05"/%3E%3C/svg%3E');
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.05;
+      }
+
+      /* CRT Scanline Effect */
+      .scanlines {
+        background: linear-gradient(
+          to bottom,
+          rgba(255,255,255,0),
+          rgba(255,255,255,0) 50%,
+          rgba(0,0,0,0.2) 50%,
+          rgba(0,0,0,0.2)
+        );
+        background-size: 100% 3px;
+        pointer-events: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        opacity: 0.08;
+      }
+      
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      
+      /* Clip Paths for Cyber UI */
+      .clip-corner-br { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+      .clip-corner-tl { clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px); }
+      .clip-hex { clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%); }
+      .clip-button { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "cors": "https://aistudiocdn.com/cors@^2.8.5",
+    "fs/": "https://aistudiocdn.com/fs@^0.0.1-security/",
+    "express": "https://aistudiocdn.com/express@^5.1.0",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24",
+    "url": "https://aistudiocdn.com/url@^0.11.4",
+    "reactflow": "https://aistudiocdn.com/reactflow@^11.10.1",
+    "clsx": "https://aistudiocdn.com/clsx@^2.0.0",
+    "tailwind-merge": "https://aistudiocdn.com/tailwind-merge@^2.0.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "reactflow/": "https://aistudiocdn.com/reactflow@^11.11.4/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div class="cyber-grid-bg"></div>
+    <div class="digital-noise"></div>
+    <div class="scanlines"></div>
+    <div id="root" class="h-screen w-screen flex flex-col relative z-10"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

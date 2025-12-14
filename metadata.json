@@ -1,0 +1,5 @@
+{
+  "name": "NeuralDeck",
+  "description": "A Cyberpunk-themed local AI interface for code auditing and editing, connecting to local vLLM.",
+  "requestFramePermissions": []
+}
