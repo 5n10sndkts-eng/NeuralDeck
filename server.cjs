@@ -162,6 +162,14 @@ const safePath = (inputPath) => {
     return resolved;
 };
 
+// Helper function to generate timestamped filename - Story 10 (R-007)
+const generateTimestampedFilename = (originalPath) => {
+    const ext = path.extname(originalPath);
+    const basename = path.basename(originalPath, ext);
+    const timestamp = Date.now();
+    return `${basename}_${timestamp}${ext}`;
+};
+
 // --- BOOTSTRAP ---
 async function start() {
 
@@ -340,10 +348,7 @@ async function start() {
             await fs.mkdir(backupDir, { recursive: true });
 
             // Generate backup filename with timestamp
-            const ext = path.extname(originalPath);
-            const basename = path.basename(originalPath, ext);
-            const timestamp = Date.now();
-            const backupFilename = `${basename}_${timestamp}${ext}`;
+            const backupFilename = generateTimestampedFilename(originalPath);
             const backupPath = path.join(backupDir, backupFilename);
 
             // Copy file to backup
@@ -354,7 +359,7 @@ async function start() {
                 success: true,
                 backupPath,
                 originalPath,
-                timestamp
+                timestamp: Date.now()
             };
         } catch (e) {
             reply.code(500).send({ error: e.message });
@@ -365,8 +370,17 @@ async function start() {
     fastify.post('/api/files/save', async (request, reply) => {
         try {
             const { path: filePath, content, mode = 'versioned' } = request.body;
-            if (!filePath || content === undefined) {
+            
+            // Validate required parameters
+            if (!filePath || content == null) {
                 return reply.code(400).send({ error: 'Missing path or content parameter' });
+            }
+
+            // Validate mode parameter
+            if (mode !== 'versioned' && mode !== 'overwrite') {
+                return reply.code(400).send({ 
+                    error: `Invalid mode: ${mode}. Must be 'versioned' or 'overwrite'` 
+                });
             }
 
             const cleanPath = safePath(filePath);
@@ -381,10 +395,7 @@ async function start() {
 
             if (mode === 'versioned') {
                 // Create versioned filename with timestamp
-                const ext = path.extname(cleanPath);
-                const basename = path.basename(cleanPath, ext);
-                const timestamp = Date.now();
-                const versionedFilename = `${basename}_${timestamp}${ext}`;
+                const versionedFilename = generateTimestampedFilename(cleanPath);
                 finalPath = path.join(dir, versionedFilename);
                 wasVersioned = true;
                 fastify.log.info(`[FILES] Creating versioned file: ${finalPath}`);
@@ -396,10 +407,7 @@ async function start() {
                     const backupDir = path.join(dir, '.backup');
                     await fs.mkdir(backupDir, { recursive: true });
                     
-                    const ext = path.extname(cleanPath);
-                    const basename = path.basename(cleanPath, ext);
-                    const timestamp = Date.now();
-                    const backupFilename = `${basename}_${timestamp}${ext}`;
+                    const backupFilename = generateTimestampedFilename(cleanPath);
                     const backupPath = path.join(backupDir, backupFilename);
                     
                     await fs.copyFile(cleanPath, backupPath);
