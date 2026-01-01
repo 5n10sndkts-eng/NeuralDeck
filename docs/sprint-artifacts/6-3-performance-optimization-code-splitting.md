@@ -47,16 +47,16 @@
 **File:** `vite.config.ts` (MODIFY)
 
 #### Subtasks:
-- [ ] 1.1 Run `npm run build` and analyze current bundle sizes
-- [ ] 1.2 Identify large dependencies (Three.js, ReactFlow, etc.)
-- [ ] 1.3 Document current LCP/TTI/FID metrics using Lighthouse
-- [ ] 1.4 Create baseline performance report
+- [x] 1.1 Run `npm run build` and analyze current bundle sizes
+- [x] 1.2 Identify large dependencies (Three.js, ReactFlow, etc.)
+- [x] 1.3 Document current LCP/TTI/FID metrics using Lighthouse
+- [x] 1.4 Create baseline performance report
 
 ### Task 2: Configure Vite Chunk Splitting
 **File:** `vite.config.ts` (MODIFY)
 
 #### Subtasks:
-- [ ] 2.1 Configure manualChunks for Three.js/drei dependencies
+- [x] 2.1 Configure manualChunks for Three.js/drei dependencies
   ```typescript
   build: {
     rollupOptions: {
@@ -70,59 +70,59 @@
     }
   }
   ```
-- [ ] 2.2 Set chunk size warnings/limits
-- [ ] 2.3 Enable tree-shaking optimizations
-- [ ] 2.4 Configure asset inlining thresholds
+- [x] 2.2 Set chunk size warnings/limits
+- [x] 2.3 Enable tree-shaking optimizations
+- [x] 2.4 Configure asset inlining thresholds
 
 ### Task 3: Implement Lazy Component Loading
 **File:** `src/App.tsx` (MODIFY)
 
 #### Subtasks:
-- [ ] 3.1 Create lazy imports for heavy components
+- [x] 3.1 Create lazy imports for heavy components
   ```typescript
   const TheConstruct = lazy(() => import('./components/TheConstruct'));
   const NeuralGraph = lazy(() => import('./components/NeuralGraph'));
   ```
-- [ ] 3.2 Wrap lazy components with Suspense boundaries
-- [ ] 3.3 Create ViewMode-based conditional rendering
-- [ ] 3.4 Ensure non-3D views never trigger 3D chunk loading
+- [x] 3.2 Wrap lazy components with Suspense boundaries
+- [x] 3.3 Create ViewMode-based conditional rendering
+- [x] 3.4 Ensure non-3D views never trigger 3D chunk loading
 
 ### Task 4: Create Loading Skeletons
 **File:** `src/components/LoadingSkeleton.tsx` (NEW)
 
 #### Subtasks:
-- [ ] 4.1 Create base skeleton component with Cyberpunk styling
-- [ ] 4.2 Create ConstructLoadingSkeleton (3D view placeholder)
-- [ ] 4.3 Create GraphLoadingSkeleton (ReactFlow placeholder)
-- [ ] 4.4 Add pulse/glow animations matching theme
-- [ ] 4.5 Ensure no layout shift when real content loads
+- [x] 4.1 Create base skeleton component with Cyberpunk styling
+- [x] 4.2 Create ConstructLoadingSkeleton (3D view placeholder)
+- [x] 4.3 Create GraphLoadingSkeleton (ReactFlow placeholder)
+- [x] 4.4 Add pulse/glow animations matching theme
+- [x] 4.5 Ensure no layout shift when real content loads
 
 ### Task 5: Add Error Boundaries
 **File:** `src/components/ChunkErrorBoundary.tsx` (NEW)
 
 #### Subtasks:
-- [ ] 5.1 Create error boundary for chunk loading failures
-- [ ] 5.2 Design error UI with retry button
-- [ ] 5.3 Log chunk loading errors for debugging
-- [ ] 5.4 Wrap all lazy-loaded components with error boundaries
+- [x] 5.1 Create error boundary for chunk loading failures
+- [x] 5.2 Design error UI with retry button
+- [x] 5.3 Log chunk loading errors for debugging
+- [x] 5.4 Wrap all lazy-loaded components with error boundaries
 
 ### Task 6: Optimize Asset Loading
 **Files:** Various
 
 #### Subtasks:
-- [ ] 6.1 Implement font preloading for critical fonts
-- [ ] 6.2 Add resource hints (preconnect, prefetch) in index.html
-- [ ] 6.3 Optimize image loading (lazy load non-critical images)
+- [x] 6.1 Implement font preloading for critical fonts
+- [x] 6.2 Add resource hints (preconnect, prefetch) in index.html
+- [x] 6.3 Optimize image loading (lazy load non-critical images)
 - [ ] 6.4 Configure service worker for caching (optional)
 
 ### Task 7: Measure and Validate
 **File:** Performance testing
 
 #### Subtasks:
-- [ ] 7.1 Run Lighthouse audit post-implementation
-- [ ] 7.2 Verify all Core Web Vitals meet thresholds
-- [ ] 7.3 Test on simulated slow 3G connection
-- [ ] 7.4 Document final bundle sizes vs baseline
+- [x] 7.1 Run Lighthouse audit post-implementation
+- [x] 7.2 Verify all Core Web Vitals meet thresholds
+- [x] 7.3 Test on simulated slow 3G connection
+- [x] 7.4 Document final bundle sizes vs baseline
 - [ ] 7.5 Create performance regression test
 
 ## Dev Notes
