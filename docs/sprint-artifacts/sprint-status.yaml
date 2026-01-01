@@ -86,9 +86,22 @@ development_status:
   6-5-list-virtualization: done
   6-6-websocket-reconnection-delta-updates: done
   6-7-code-diff-visualization: done
-  6-8-checkpoint-undo-system: ready-for-dev
+  6-8-checkpoint-undo-system: done
   epic-6-retrospective: optional
 
+  # Epic 7: Advanced Swarm Intelligence & Orchestration
+  epic-7: in-progress
+  7-1-cognitive-swarm-core: done
+  7-2-orchestrator-v2-neural-graph: done
+  7-3-adaptive-hive-mind: done
+
+  7-3-adaptive-hive-mind: done
+
+  # Epic 8: Autonomous Self-Healing & Optimization
+  epic-8: backlog
+  8-1-error-pulse-monitor: backlog
+  8-2-auto-fix-agent: backlog
+  8-3-performance-tuner: backlog
   # Legacy Stories (from previous epic numbering system)
   # Note: These stories are completed but don't match current epic structure
   story-9-voice-command-core: done

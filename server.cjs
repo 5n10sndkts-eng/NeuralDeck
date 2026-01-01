@@ -5,14 +5,14 @@ const { exec } = require('child_process');
 
 // --- DEFENSIVE MODULES (Safe Require) ---
 const safeRequire = (name) => {
-    try { return require(name); } 
-    catch (e) { 
-        console.warn(`[SYSTEM WARNING] Module '${name}' not detected. Security protocols compromised. Run: npm install ${name}`); 
-        return null; 
+    try { return require(name); }
+    catch (e) {
+        console.warn(`[SYSTEM WARNING] Module '${name}' not detected. Security protocols compromised. Run: npm install ${name}`);
+        return null;
     }
 };
 
-const fastify = require('fastify')({ 
+const fastify = require('fastify')({
     logger: true,
     bodyLimit: 52428800 // 50MB limit
 });
@@ -39,6 +39,12 @@ const { broadcast } = require('./server/services/socket.cjs');
 
 // --- CHECKPOINT SERVICE - Story 6-8 ---
 const { getCheckpointService } = require('./server/services/checkpointService.cjs');
+
+// --- REASONING SERVICE - Story 7-1 ---
+const reasoningService = require('./server/services/reasoningService.cjs');
+
+// --- HIVE MEMORY SERVICE - Story 7-3 ---
+const hiveMemory = require('./server/services/hiveMemory.cjs');
 
 const PORT = process.env.PORT || 3001;
 const WORKSPACE_PATH = process.cwd();
@@ -195,7 +201,7 @@ async function start() {
     // 1. Security Headers (Helmet) - Story 1.1 & 6-4
     if (helmet) {
         const isDevelopment = process.env.NODE_ENV !== 'production';
-        
+
         await fastify.register(helmet, {
             contentSecurityPolicy: {
                 directives: {
@@ -515,9 +521,9 @@ async function start() {
         try {
             const { provider } = request.params;
             const apiKey = await encryption.getApiKey(provider);
-            
+
             await securityLogger.logApiKeyOperation('read', provider, request.user.userId, request.ip);
-            
+
             if (!apiKey) {
                 reply.code(404).send({ error: `No API key found for provider: ${provider}` });
                 return;
@@ -583,11 +589,11 @@ async function start() {
 
     // Health Check
     fastify.get('/health', async (request, reply) => {
-        return { 
-            status: 'ONLINE', 
-            uptime: process.uptime(), 
+        return {
+            status: 'ONLINE',
+            uptime: process.uptime(),
             timestamp: Date.now(),
-            version: '2.0.0-CYBER-FASTIFY' 
+            version: '2.0.0-CYBER-FASTIFY'
         };
     });
 
@@ -601,19 +607,48 @@ async function start() {
         }
     });
 
+    // --- REASONING SERVICE - Story 7-1 ---
+    fastify.post('/api/think', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { prompt } = request.body;
+            if (!prompt) {
+                return reply.code(400).send({ error: 'Prompt is required' });
+            }
+
+            const thoughts = await reasoningService.decomposeRequest(prompt);
+            await securityLogger.logAiOperation('sequential-thinking', request.user?.userId || 'anonymous', request.ip);
+
+            return { thoughts };
+        } catch (e) {
+            fastify.log.error(`[THINK] Error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // --- HIVE MEMORY - Story 7-3 ---
+    fastify.get('/api/hive', { preHandler: optionalAuth }, async (request, reply) => {
+        return { memories: hiveMemory.getAllMemories() };
+    });
+
+    fastify.post('/api/hive/learn', { preHandler: optionalAuth }, async (request, reply) => {
+        const { key, value } = request.body;
+        hiveMemory.learn(key, value, request.user?.userId || 'api');
+        return { success: true };
+    });
+
     // File System: Read
     fastify.post('/api/read', { preHandler: optionalAuth }, async (request, reply) => {
         try {
             const { filePath } = request.body;
             const cleanPath = safePath(filePath);
             const content = await fs.readFile(cleanPath, 'utf-8');
-            
+
             await securityLogger.logFileRead(
                 filePath,
                 request.user?.userId || 'anonymous',
                 true
             );
-            
+
             return { content };
         } catch (e) {
             await securityLogger.logFileRead(
@@ -700,7 +735,7 @@ async function start() {
                 return reply.code(400).send({ error: 'Missing path parameter' });
             }
             const originalPath = safePath(filePath);
-            
+
             // Check if original file exists
             try {
                 await fs.access(originalPath);
@@ -736,7 +771,7 @@ async function start() {
     fastify.post('/api/files/save', async (request, reply) => {
         try {
             const { path: filePath, content, mode = 'versioned' } = request.body;
-            
+
             // Validate required parameters
             if (!filePath || content == null) {
                 return reply.code(400).send({ error: 'Missing path or content parameter' });
@@ -744,14 +779,14 @@ async function start() {
 
             // Validate mode parameter
             if (mode !== 'versioned' && mode !== 'overwrite') {
-                return reply.code(400).send({ 
-                    error: `Invalid mode: ${mode}. Must be 'versioned' or 'overwrite'` 
+                return reply.code(400).send({
+                    error: `Invalid mode: ${mode}. Must be 'versioned' or 'overwrite'`
                 });
             }
 
             const cleanPath = safePath(filePath);
             const dir = path.dirname(cleanPath);
-            
+
             // Ensure directory exists
             await fs.mkdir(dir, { recursive: true });
 
@@ -772,10 +807,10 @@ async function start() {
                     // File exists - create backup first
                     const backupDir = path.join(dir, '.backup');
                     await fs.mkdir(backupDir, { recursive: true });
-                    
+
                     const backupFilename = generateTimestampedFilename(cleanPath);
                     const backupPath = path.join(backupDir, backupFilename);
-                    
+
                     await fs.copyFile(cleanPath, backupPath);
                     backupCreated = true;
                     fastify.log.info(`[FILES] Backup created before overwrite: ${backupPath}`);
@@ -1527,7 +1562,7 @@ async function start() {
 
             // Sanitize and validate paths
             const safeDockerfilePath = safePath(dockerfilePath);
-            
+
             // Check if Dockerfile exists
             try {
                 await fs.access(safeDockerfilePath);
@@ -1581,7 +1616,7 @@ async function start() {
 
             const buildSuccess = !buildResult.error;
             const buildOutput = buildResult.stdout + buildResult.stderr;
-            
+
             fastify.log.info(`[DOCKER] Build ${buildSuccess ? 'succeeded' : 'failed'} for ${imageTag}`);
 
             // Parse errors if build failed
@@ -3115,11 +3150,11 @@ ${contentB}
     // --- SOCKET.IO INITIALIZATION - Story 4-1 & 6-4 ---
     try {
         const { initSocket } = require('./server/services/socket.cjs');
-        
+
         // Socket.IO needs the HTTP server, which Fastify wraps
         await fastify.ready();
         const httpServer = fastify.server;
-        
+
         // Initialize Socket.IO with JWT auth
         initSocket(httpServer, {
             jwtSecret: JWT_SECRET,
@@ -3127,7 +3162,7 @@ ${contentB}
             activeSessions,
             securityLogger,
         });
-        
+
         fastify.log.info('[SOCKET] Socket.IO initialized with JWT authentication');
     } catch (err) {
         fastify.log.error(`[SOCKET] Failed to initialize Socket.IO: ${err.message}`);
@@ -3137,7 +3172,7 @@ ${contentB}
     try {
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`NEURAL DECK CORE ONLINE: http://localhost:${PORT}`);
-        
+
         // Log JWT secret info (for development only)
         if (process.env.NODE_ENV !== 'production') {
             console.log(`[AUTH] JWT_SECRET: ${JWT_SECRET.substring(0, 10)}...`);
@@ -3171,7 +3206,7 @@ async function getFileStructure(dir) {
 function generateNodeDockerfile({ dependencies = {}, buildCommand, port = 3001, envVars = {} }) {
     const nodeVersion = dependencies.nodeVersion || '20-alpine';
     const buildCmd = buildCommand || 'npm run build';
-    
+
     let envVarsSection = '';
     if (Object.keys(envVars).length > 0) {
         envVarsSection = Object.entries(envVars)
@@ -3214,7 +3249,7 @@ CMD ["node", "index.js"]
 function generatePythonDockerfile({ dependencies = {}, buildCommand, port = 8000, envVars = {} }) {
     const pythonVersion = dependencies.pythonVersion || '3.11-alpine';
     const buildCmd = buildCommand || 'pip install -r requirements.txt';
-    
+
     let envVarsSection = '';
     if (Object.keys(envVars).length > 0) {
         envVarsSection = Object.entries(envVars)
@@ -3254,7 +3289,7 @@ CMD ["python", "app.py"]
 function generateReactDockerfile({ dependencies = {}, buildCommand, port = 5173, envVars = {} }) {
     const nodeVersion = dependencies.nodeVersion || '20-alpine';
     const buildCmd = buildCommand || 'npm run build';
-    
+
     let envVarsSection = '';
     if (Object.keys(envVars).length > 0) {
         envVarsSection = Object.entries(envVars)
@@ -3296,23 +3331,23 @@ CMD ["nginx", "-g", "daemon off;"]
 function parseDockerErrors(buildOutput) {
     const errors = [];
     const lines = buildOutput.split('\n');
-    
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        
+
         // Match Docker error patterns
         // Pattern 1: "ERROR [stage 0/2] RUN ..." followed by error details
         if (line.includes('ERROR') || line.includes('error')) {
             // Try to extract line number from Dockerfile reference
             const lineMatch = line.match(/Dockerfile:(\d+)/);
             const dockerfileLine = lineMatch ? parseInt(lineMatch[1], 10) : null;
-            
+
             // Extract error message
             let errorMessage = line;
             if (i + 1 < lines.length && lines[i + 1].trim()) {
                 errorMessage += ' ' + lines[i + 1].trim();
             }
-            
+
             errors.push({
                 line: i + 1,
                 dockerfileLine: dockerfileLine,
@@ -3320,7 +3355,7 @@ function parseDockerErrors(buildOutput) {
                 raw: line
             });
         }
-        
+
         // Pattern 2: Build step errors with line references
         const stepMatch = line.match(/Step (\d+)\/(\d+)/);
         if (stepMatch && i + 1 < lines.length) {
@@ -3335,7 +3370,7 @@ function parseDockerErrors(buildOutput) {
             }
         }
     }
-    
+
     return errors;
 }
 

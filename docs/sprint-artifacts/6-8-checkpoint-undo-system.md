@@ -13,7 +13,7 @@
 | Epic | 6 - Production Hardening & Intelligence |
 | Priority | P2 |
 | Effort | 3 days |
-| Status | ready-for-dev |
+| Status | done |
 
 ## Acceptance Criteria
 

@@ -362,3 +362,27 @@ export const cleanupCheckpoints = async (): Promise<{ deletedCount: number }> =>
 
   return res.json();
 };
+
+// --- Story 7-1: COGNITIVE SWARM ---
+
+export interface Thought {
+  id: string;
+  thought: string;
+  thoughtNumber: number;
+  role: string;
+}
+
+export const triggerThink = async (prompt: string): Promise<{ thoughts: Thought[] }> => {
+  const res = await apiFetch(`${API_BASE}/think`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to trigger reasoning');
+  }
+
+  return res.json();
+};

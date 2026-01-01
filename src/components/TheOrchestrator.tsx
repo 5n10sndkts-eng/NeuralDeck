@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
 import { useSwarm } from '../hooks/useSwarm';
 import { AgentCard } from './AgentCard';
-import { NeuralGraph } from './NeuralGraph';
+import { NeuralGraph3D } from './NeuralGraph3D';
 import { RAGStatusPanel } from './RAGStatusPanel';
+import { HiveStatus } from './HiveStatus';
 import { AgentProfile } from '../types';
 
 export const TheOrchestrator: React.FC = () => {
-    const { nodes, edges, activeAgents } = useSwarm();
+    const { nodes, edges, activeAgents, triggerReasoning } = useSwarm();
     const [showRAGPanel, setShowRAGPanel] = useState(false);
+    const [prompt, setPrompt] = useState('');
+
+    const handleThink = () => {
+        if (!prompt.trim()) return;
+        triggerReasoning(prompt);
+        setPrompt('');
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleThink();
+        }
+    };
 
     const AGENTS: AgentProfile[] = ['analyst', 'architect', 'developer', 'qa_engineer'];
 
@@ -97,6 +112,37 @@ export const TheOrchestrator: React.FC = () => {
                         </button>
                     </div>
                     <RAGStatusPanel compact={!showRAGPanel} className={showRAGPanel ? 'mt-2' : ''} />
+                    <RAGStatusPanel compact={!showRAGPanel} className={showRAGPanel ? 'mt-2' : ''} />
+                    <RAGStatusPanel compact={!showRAGPanel} className={showRAGPanel ? 'mt-2' : ''} />
+                </div>
+
+                {/* Hive Memory Status - Story 7.3 */}
+                <div className="p-4 pt-0">
+                    <HiveStatus />
+                </div>
+
+                {/* Neural Uplink (Input) - Story 7.1 */}
+                <div className="p-4 pt-2">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="INITIALIZE THOUGHT SEQUENCE..."
+                            className="w-full bg-black/40 border border-[#00f0ff]/30 rounded px-3 py-2 text-xs text-[#00f0ff] placeholder-[#00f0ff]/40 focus:outline-none focus:border-[#00f0ff] focus:ring-1 focus:ring-[#00f0ff]/50 transition-all font-mono"
+                            style={{ boxShadow: '0 0 10px rgba(0, 240, 255, 0.05)' }}
+                        />
+                        <div className="absolute right-1 top-1 bottom-1">
+                            <button
+                                onClick={handleThink}
+                                disabled={!prompt.trim()}
+                                className="h-full px-3 text-[10px] font-bold text-black bg-[#00f0ff] hover:bg-[#00f0ff]/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-sm transition-colors"
+                            >
+                                EXEC
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -145,8 +191,9 @@ export const TheOrchestrator: React.FC = () => {
                 </div>
 
                 {/* Graph Area */}
-                <div className="flex-1 p-4 overflow-hidden">
-                    <NeuralGraph nodes={nodes} edges={edges} />
+                {/* Graph Area - 3D Implementation (Story 7.2) */}
+                <div className="flex-1 overflow-hidden">
+                    <NeuralGraph3D nodes={nodes} edges={edges} />
                 </div>
             </div>
         </div>

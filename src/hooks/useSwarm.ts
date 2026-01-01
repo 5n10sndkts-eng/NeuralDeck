@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSocket } from './useSocket';
 import { AgentProfile, AgentNodeState } from '../types';
 import { StoryMetadata } from './useStoryWatcher';
+import { triggerThink, Thought } from '../services/api';
 
 export interface SwarmNode {
     id: string;
@@ -222,6 +223,47 @@ export const useSwarm = () => {
         };
     }, []);
 
+    /**
+     * Trigger sequential thinking (Story 7.1)
+     */
+    const triggerReasoning = useCallback(async (prompt: string) => {
+        try {
+            const { thoughts } = await triggerThink(prompt);
+
+            // Map thoughts to SwarmNodes for visualization
+            const newNodes: SwarmNode[] = thoughts.map((t, index) => ({
+                id: t.id || `thought-${Date.now()}-${index}`,
+                agent: (t.role as AgentProfile) || 'analyst',
+                content: t.thought,
+                type: 'analysis', // Thoughts are analysis/planning
+                status: 'completed',
+                timestamp: Date.now(),
+                x: Math.random() * 100,
+                y: Math.random() * 100
+            }));
+
+            setNodes(prev => [...prev, ...newNodes]);
+
+            // Add edges between sequential thoughts
+            setEdges(prev => {
+                const newEdges: { source: string, target: string }[] = [];
+                // Connect to last existing node if any
+                if (prev.length > 0 && newNodes.length > 0) {
+                    // logic to connect to *something* meaningful, for now just loosely attach
+                }
+
+                // Connect new nodes sequentially
+                for (let i = 0; i < newNodes.length - 1; i++) {
+                    newEdges.push({ source: newNodes[i].id, target: newNodes[i + 1].id });
+                }
+                return [...prev, ...newEdges];
+            });
+
+        } catch (error) {
+            console.error("[useSwarm] Reasoning failed:", error);
+        }
+    }, []);
+
     return {
         // Original swarm functionality
         nodes,
@@ -237,6 +279,7 @@ export const useSwarm = () => {
         spawnDeveloperNodesFromStories,
         getSpawnMetrics,
         storyToDevMap,
+        triggerReasoning, // Story 7.1
     };
 };
 

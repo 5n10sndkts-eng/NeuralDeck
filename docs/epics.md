@@ -1176,3 +1176,114 @@ So that I can undo changes if an agent makes a mistake.
 - Story 6.7: Code Diff Visualization (3 days)
 - Story 6.8: Checkpoint/Undo System (3 days)
 
+
+## Epic 7: Advanced Swarm Intelligence & Orchestration
+
+Formalize the "Neural Orchestrator" vision. This epic focuses on advanced multi-agent coordination, real-time visualization, and dynamic adaptive behaviors, building on the foundations of Epic 4.
+
+### Story 7.1: Cognitive Swarm Core
+
+As a User,
+I want the system to use "sequential thinking" for complex problem decomposition,
+So that the Swarm can handle multi-step reasoning tasks autonomously.
+
+**Acceptance Criteria:**
+
+**Given** a complex user request
+**When** the Swarm processes it
+**Then** it must use the `sequential-thinking` tool to break it down into steps
+**And** each step must be assigned to an appropriate agent role
+**And** the reasoning chain must be visible in the Orchestrator
+
+**Priority:** P1
+**Effort:** 5 days
+**Dependencies:** Epic 4
+
+### Story 7.2: Orchestrator V2 (Neural Graph)
+
+As a User,
+I want an interactive, real-time 3D visualization of the agent "thought cloud",
+So that I can intuitively understand the Swarm's logic and status.
+
+**Acceptance Criteria:**
+
+**Given** the Swarm is thinking
+**When** new thoughts are generated
+**Then** the Neural Graph must update in real-time (no refresh)
+**And** nodes must represent thoughts/steps, edges represent dependencies
+**And** the UI must allow zooming and panning deeply into the "brain"
+
+**Priority:** P2
+**Effort:** 5 days
+**Dependencies:** Story 7.1
+
+### Story 7.3: Adaptive Hive Mind
+
+As a User,
+I want agents to share context and learn from each other during a session,
+So that the Swarm improves its efficiency as it works.
+
+**Acceptance Criteria:**
+
+**Given** multiple agents working
+**When** one agent discovers new information (e.g., a file path or bug)
+**Then** it must be shared to a "Hive Memory" accessible by others
+**And** subsequent agents must use this info without rediscovering it
+
+**Priority:** P2
+**Effort:** 5 days
+**Dependencies:** Story 7.1
+
+# Epic 8: Autonomous Self-Healing & Optimization
+
+**Objective:**
+Enable the Swarm to detect runtime errors, performance bottlenecks, and code quality issues, and automatically propose or apply fixes.
+
+**Rationale:**
+With the Hive Memory (Epic 7) in place, agents can now "remember" errors. Epic 8 leverages this to close the loop, making the IDE self-repairing.
+
+### Story 8.1: Error Pulse Monitor
+
+As a Dev Agent,
+I want to listen for runtime errors in the user's application,
+So that I can log them to Hive Memory for analysis.
+
+**Acceptance Criteria:**
+- [ ] Global error handler in `TheOrchestrator` / `App.tsx`
+- [ ] Errors are sanitized and pushed to Hive Memory (Key: `error:{hexdigest}`)
+- [ ] Visual "Pulse" in the UI when an error occurs
+
+**Priority:** P1
+**Effort:** 3 days
+**Dependencies:** Story 7.3
+
+### Story 8.2: Auto-Fix Agent
+
+As a User,
+I want the Swarm to proactively suggest fixes for captured errors,
+So that I can maintain stability without manual debugging.
+
+**Acceptance Criteria:**
+- [ ] New agent role: `Medic` or `Fixer`
+- [ ] Monitors Hive for new `error:*` keys
+- [ ] Spawns a background thought process to analyze the error
+- [ ] Generates a proposed code patch (diff)
+
+**Priority:** P1
+**Effort:** 5 days
+**Dependencies:** Story 8.1
+
+### Story 8.3: Performance Tuner
+
+As a User,
+I want the Swarm to identify slow components,
+So that the application remains responsive.
+
+**Acceptance Criteria:**
+- [ ] Track render counts / latency in `NeuralGraph3D` and other heavy components
+- [ ] Report hotspots to Hive
+- [ ] `Architect` agent proposes optimization (e.g., memoization)
+
+**Priority:** P2
+**Effort:** 5 days
+**Dependencies:** Story 8.1
