@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // Contexts
 import { UIProvider, useUI } from './contexts/UIContext';
+import { ConversationProvider, useConversation } from './contexts/ConversationContext';
 import { HoloPanel } from './components/HoloPanel';
 import { useSocket } from './hooks/useSocket';
 import { MainLayout } from './components/MainLayout';
@@ -48,12 +49,22 @@ import { GlobalAudio } from './services/audioEngine';
 import { SoundEffects } from './services/sound';
 import type { AmbientMood } from './services/ambientGenerator';
 import { AGENT_DEFINITIONS } from './services/agent';
+import { storageManager } from './services/storageManager';
 import { FileNode, ChatMessage, ConnectionProfile, ViewMode, AgentProfile } from './types';
 
 const AppContent: React.FC = () => {
     // --- UI CONTEXT (Adaptive) ---
     const { mode, isAlert, toggleAlert, setActiveAgents: setUIImplActiveAgents } = useUI();
     const { phase, logs, activeAgents, isAutoMode, toggleAuto, currentThought } = useSocket(); // useSocket call moved to top
+    
+    // --- CONVERSATION CONTEXT ---
+    const {
+        messages,
+        addMessage,
+        currentSessionId,
+        newSession,
+        isLoading: isLoadingConversation
+    } = useConversation();
 
     // Sync activeAgents from Socket to UI Context
     useEffect(() => {
@@ -68,11 +79,6 @@ const AppContent: React.FC = () => {
     const [fileContents, setFileContents] = useState<Record<string, string>>({});
     const [openFiles, setOpenFiles] = useState<string[]>([]);
     const [activeFile, setActiveFile] = useState<string | null>(null);
-    const [messages, setMessages] = useState<ChatMessage[]>([{
-        role: 'system',
-        content: "NEURAL DECK v2.0 'NEON PRIME' SYSTEM ONLINE.\n\nCOMMANDS:\n- Type 'help' for options.\n- Use the DOCK (Left) to navigate.\n- Click 'Neural Orchestrator' to view Swarm.",
-        timestamp: Date.now()
-    }]);
     const [showCmdPalette, setShowCmdPalette] = useState(false);
     const [isLoadingFiles, setIsLoadingFiles] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
@@ -114,6 +120,13 @@ const AppContent: React.FC = () => {
     useEffect(() => { localStorage.setItem('neural_routing', JSON.stringify(agentRouting)); }, [agentRouting]);
     useEffect(() => { localStorage.setItem('audio_volume', audioVolume.toString()); }, [audioVolume]);
     useEffect(() => { localStorage.setItem('audio_mood', audioMood); }, [audioMood]);
+
+    // Storage auto-cleanup initialization (Story 6-2)
+    useEffect(() => {
+        storageManager.initAutoCleanup(async () => {
+            return await cleanupOldSessions(storageManager.getRetentionPeriod());
+        });
+    }, []);
 
     // --- AUDIO SYSTEM (Unified) ---
     // isMuted is already defined at line 98
@@ -316,7 +329,7 @@ const AppContent: React.FC = () => {
     // --- TERMINAL HANDLERS ---
     const handleSendMessage = async (text: string) => {
         const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
-        setMessages(prev => [...prev, userMsg]);
+        await addMessage(userMsg);
         SoundEffects.typing();
 
         let chatHistory = [...messages, userMsg];
@@ -340,7 +353,7 @@ const AppContent: React.FC = () => {
             baseUrl: activeConfig.baseUrl
         });
 
-        setMessages(prev => [...prev, { ...response, agentId }]);
+        await addMessage({ ...response, agentId });
     };
 
     const handleCodeTransfer = async (code: string) => {
@@ -368,7 +381,7 @@ const AppContent: React.FC = () => {
             timestamp: Date.now()
         };
 
-        setMessages(prev => [...prev, userMsg]);
+        await addMessage(userMsg);
         SoundEffects.typing();
 
         const response = await sendChat([...messages, userMsg], {
@@ -377,14 +390,14 @@ const AppContent: React.FC = () => {
             baseUrl: activeConfig.baseUrl
         });
 
-        setMessages(prev => [...prev, response]);
+        await addMessage(response);
     };
 
     // --- COMMAND PALETTE HANDLER ---
-    const handleCommand = (cmd: string) => {
+    const handleCommand = async (cmd: string) => {
         if (cmd.startsWith('view:')) setView(cmd.split(':')[1] as ViewMode);
         if (cmd === 'toggle:auto') toggleAuto();
-        if (cmd === 'clear') setMessages([]);
+        if (cmd === 'clear') await newSession();
         if (cmd === 'audit' && activeFile) handleAudit(activeFile);
     };
 
@@ -411,7 +424,7 @@ const AppContent: React.FC = () => {
                 content: `[VISION CORTEX] ${steps[i]}`,
                 timestamp: Date.now()
             };
-            setMessages(prev => [...prev, analysisMsg]);
+            await addMessage(analysisMsg);
         }
     };
 
@@ -656,7 +669,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <UIProvider>
-            <AppContent />
+            <ConversationProvider>
+                <AppContent />
+            </ConversationProvider>
         </UIProvider>
     );
 };

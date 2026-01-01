@@ -464,6 +464,18 @@ export const useSocket = () => {
             }));
         });
 
+        // --- CONVERSATION EVENT LISTENERS (Story 6-2) ---
+        
+        s.on('chat:message', (message: any) => {
+            console.log('[useSocket] Chat message received:', message);
+            // Messages are handled by ConversationContext, this is for multi-tab sync
+        });
+
+        s.on('chat:session', (data: { sessionId: string; action: string }) => {
+            console.log('[useSocket] Chat session event:', data);
+            // Session changes from other tabs (for future multi-tab coordination)
+        });
+
         setSocket(s);
 
         return () => {

@@ -1,9 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ChatMessage, AgentProfile } from '../types';
-import { Terminal, Volume2, VolumeX, ArrowRight, Activity, AlertTriangle } from 'lucide-react';
+import { Terminal, Volume2, VolumeX, ArrowRight, Activity, AlertTriangle, History, Plus } from 'lucide-react';
 import { SoundEffects } from '../services/sound';
 import { CyberInput } from './CyberUI';
 import { AGENT_DEFINITIONS } from '../services/agent';
+import { useConversation } from '../contexts/ConversationContext';
+import { ConversationHistory } from './ConversationHistory';
 
 interface Props {
   messages: ChatMessage[];
@@ -23,6 +25,8 @@ import { VisionDropZone } from './VisionDropZone';
 const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isMuted, onTransferCode, activePersona }) => {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const { newSession, currentSessionId, sessions } = useConversation();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,6 +47,19 @@ const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isM
     reader.readAsDataURL(file);
   };
 
+  const handleNewSession = async () => {
+    if (messages.length > 0) {
+      if (confirm('Start a new session? Current conversation will be saved.')) {
+        await newSession();
+        SoundEffects.success();
+      }
+    } else {
+      await newSession();
+      SoundEffects.success();
+    }
+  };
+
+  const currentSession = sessions.find(s => s.id === currentSessionId);
   const personaDef = activePersona ? AGENT_DEFINITIONS[activePersona] : null;
 
   return (
@@ -61,7 +78,7 @@ const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isM
             background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.5) 50%, transparent 100%)'
           }} />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Terminal size={12} style={{ color: '#00f0ff' }} />
             <span style={{
               color: '#00f0ff',
@@ -70,25 +87,51 @@ const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isM
               fontSize: '11px',
               textShadow: '0 0 10px rgba(0, 240, 255, 0.5)'
             }}>NEURAL_UPLINK</span>
+            
+            {/* Session Info */}
+            {currentSession && (
+              <span className="text-[9px] text-gray-500 ml-2 max-w-[150px] truncate">
+                {currentSession.title}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center gap-3 text-[10px]">
-            <span style={{
-              color: isThinking ? '#ffd000' : '#4b5563',
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              textShadow: isThinking ? '0 0 8px rgba(255, 208, 0, 0.5)' : 'none'
-            }}>
-              {isThinking ? 'PROCESSING...' : 'STANDBY'}
-            </span>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: isThinking ? '#ffd000' : '#4ade80',
-              boxShadow: isThinking ? '0 0 8px #ffd000' : '0 0 8px #4ade80',
-              animation: isThinking ? 'pulse 1.5s infinite' : 'none'
-            }} />
+          <div className="flex items-center gap-3">
+            {/* Session Controls */}
+            <button
+              onClick={() => setShowHistory(true)}
+              className="p-1.5 hover:bg-cyan-500/10 rounded transition-colors"
+              title="Session History"
+            >
+              <History size={12} className="text-cyan-400" />
+            </button>
+            <button
+              onClick={handleNewSession}
+              className="p-1.5 hover:bg-purple-500/10 rounded transition-colors"
+              title="New Session"
+            >
+              <Plus size={12} className="text-purple-400" />
+            </button>
+
+            {/* Status Indicator */}
+            <div className="flex items-center gap-2 text-[10px]">
+              <span style={{
+                color: isThinking ? '#ffd000' : '#4b5563',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                textShadow: isThinking ? '0 0 8px rgba(255, 208, 0, 0.5)' : 'none'
+              }}>
+                {isThinking ? 'PROCESSING...' : 'STANDBY'}
+              </span>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: isThinking ? '#ffd000' : '#4ade80',
+                boxShadow: isThinking ? '0 0 8px #ffd000' : '0 0 8px #4ade80',
+                animation: isThinking ? 'pulse 1.5s infinite' : 'none'
+              }} />
+            </div>
           </div>
         </div>
 
@@ -270,6 +313,9 @@ const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isM
             }} />
           </div>
         </div>
+
+        {/* Conversation History Modal */}
+        <ConversationHistory isOpen={showHistory} onClose={() => setShowHistory(false)} />
       </div>
     </VisionDropZone>
   );
