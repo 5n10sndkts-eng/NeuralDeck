@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { LogEntry, NeuralPhase } from './useNeuralAutonomy'; // Reuse types for now
 import { AgentProfile, AgentNodeState, VulnerabilityFinding, SecurityReport, VulnerabilitySeverity } from '../types';
+import { authService } from '../services/auth';
 
 // --- SWARM EVENT TYPES (Story 4-2) ---
 
@@ -217,9 +218,15 @@ export const useSocket = () => {
     const [securityState, setSecurityState] = useState<SecurityScanState>(initialSecurityState);
 
     useEffect(() => {
-        // Connect to backend
+        // Connect to backend with JWT auth
         const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-        const s = io(socketUrl);
+        const token = authService.getToken();
+        
+        const s = io(socketUrl, {
+            auth: {
+                token: token || undefined
+            }
+        });
 
         s.on('connect', () => {
             setIsConnected(true);
@@ -227,6 +234,19 @@ export const useSocket = () => {
         });
 
         s.on('disconnect', () => setIsConnected(false));
+        
+        s.on('connect_error', (error) => {
+            console.error('[Socket] Connection error:', error.message);
+            // If auth error, try to create a session
+            if (error.message.includes('Authentication') && !token) {
+                console.log('[Socket] No token, creating anonymous session...');
+                authService.createSession().then(() => {
+                    // Reconnect with new token
+                    s.auth = { token: authService.getToken() || undefined };
+                    s.connect();
+                });
+            }
+        });
 
         // --- LISTENERS ---
 
@@ -462,6 +482,18 @@ export const useSocket = () => {
                 status: 'cancelled',
                 endTime: event.timestamp,
             }));
+        });
+
+        // --- CONVERSATION EVENT LISTENERS (Story 6-2) ---
+        
+        s.on('chat:message', (message: any) => {
+            console.log('[useSocket] Chat message received:', message);
+            // Messages are handled by ConversationContext, this is for multi-tab sync
+        });
+
+        s.on('chat:session', (data: { sessionId: string; action: string }) => {
+            console.log('[useSocket] Chat session event:', data);
+            // Session changes from other tabs (for future multi-tab coordination)
         });
 
         setSocket(s);

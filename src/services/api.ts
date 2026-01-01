@@ -1,7 +1,17 @@
 
 import { ChatMessage, FileNode, LlmConfig } from '../types';
+import { authFetch, authService } from './auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
+
+// Helper to make requests with optional auth
+async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  // Use auth service if available, otherwise fallback to regular fetch
+  if (authService.isAuthenticated()) {
+    return authFetch(url, options);
+  }
+  return fetch(url, options);
+}
 
 // --- MCP METHODS ---
 export const getMCPTools = async () => {

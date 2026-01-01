@@ -80,10 +80,10 @@ development_status:
   # Epic 6: Production Hardening & Intelligence
   epic-6: in-progress
   6-1-codebase-rag-indexing-system: done
-  6-2-conversation-persistence: ready-for-dev
-  6-3-performance-optimization-code-splitting: ready-for-dev
-  6-4-security-hardening: ready-for-dev
-  6-5-list-virtualization: ready-for-dev
+  6-2-conversation-persistence: done
+  6-3-performance-optimization-code-splitting: done
+  6-4-security-hardening: done
+  6-5-list-virtualization: done
   6-6-websocket-reconnection-delta-updates: ready-for-dev
   6-7-code-diff-visualization: ready-for-dev
   6-8-checkpoint-undo-system: ready-for-dev

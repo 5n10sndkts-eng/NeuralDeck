@@ -16,12 +16,18 @@ export default defineConfig(({ mode }) => {
           output: {
             manualChunks: {
               'react-vendor': ['react', 'react-dom'],
-              'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
-              'reactflow-vendor': ['reactflow']
+              'three-vendor': ['three', '@react-three/fiber', '@react-three/drei', '@react-three/postprocessing', '@react-three/cannon'],
+              'reactflow-vendor': ['reactflow', 'dagre'],
+              'ui-vendor': ['framer-motion', 'lucide-react'],
+              'socket-vendor': ['socket.io-client'],
+              'db-vendor': ['dexie']
             }
           }
         },
-        chunkSizeWarningLimit: 600
+        chunkSizeWarningLimit: 600,
+        target: 'es2020',
+        minify: 'esbuild',
+        sourcemap: false
       },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
