@@ -1,7 +1,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
-  roots: ['<rootDir>/tests'],
+  roots: ['<rootDir>/tests', '<rootDir>/server'],
   testMatch: ['**/*.test.ts', '**/*.test.tsx', '**/*.test.js'],
   // Exclude tests that require running server or browser APIs from default run
   testPathIgnorePatterns: [

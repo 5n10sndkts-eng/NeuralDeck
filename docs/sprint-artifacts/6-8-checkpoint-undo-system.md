@@ -233,3 +233,24 @@
 
 **Created:** 2026-01-01
 **Workflow:** BMAD Create-Story v4.0
+
+## Dev Agent Record
+
+### File List
+- `server/services/checkpointService.cjs` (NEW) - Core service logic
+- `server.cjs` (MODIFY) - Integrated checkpoint service and API/write hook
+- `src/components/CheckpointPanel.tsx` (NEW) - Checkpoint UI
+- `src/components/TheEditor.tsx` (MODIFY) - Integrated CheckpointPanel and History button
+- `src/services/api.ts` (MODIFY) - Added checkpoint API client functions
+- `server/services/__tests__/checkpointService.test.js` (NEW) - Unit tests
+
+### Testing
+- **Unit Tests**: Created `server/services/__tests__/checkpointService.test.js` covering AC1 (Creation), AC2 (Listing), AC3 (Restore), AC4 (Cleanup). All tests passed.
+- **Manual Verification**: Verified UI integration in `TheEditor` and API endpoints.
+
+### Change Log
+- Implemented `CheckpointService` with file-based storage and index.
+- Added automatic checkpointing to `/api/write` endpoint.
+- Created `CheckpointPanel` with timeline view and preview/restore functionality.
+- Integrated `History` button in Editor toolbar.
+- Validated with unit tests.
