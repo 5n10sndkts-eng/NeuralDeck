@@ -75,7 +75,7 @@ const TheRoundtable: React.FC<Props> = ({ fileContents, llmConfig }) => {
     };
 
     return (
-        <div className="w-full h-full flex flex-col md:flex-row overflow-hidden font-mono relative transition-colors duration-700" style={{
+        <div className="flex-1 flex flex-row overflow-hidden font-mono relative transition-colors duration-700" style={{
             backgroundColor: isWarRoom ? 'rgba(15, 2, 2, 1)' : 'var(--color-void)'
         }}>
             {/* Background Ambience */}
@@ -93,7 +93,7 @@ const TheRoundtable: React.FC<Props> = ({ fileContents, llmConfig }) => {
             )}
 
             {/* Left Config Panel */}
-            <div className="w-full md:w-80 flex flex-col z-10" style={{
+            <div className="w-80 flex-shrink-0 flex flex-col z-10" style={{
                 backgroundColor: 'rgba(0, 0, 0, 0.4)',
                 backdropFilter: 'blur(16px)',
                 borderRight: '1px solid rgba(255, 255, 255, 0.1)'
