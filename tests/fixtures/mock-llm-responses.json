@@ -1,0 +1,18 @@
+{
+  "analyst": {
+    "content": "# Market Analysis\\n\\n## Target Market\\nDevelopers building modern web applications with focus on data visualization and real-time updates.\\n\\n## Competitive Landscape\\n- Competitor A: Dashboard tools\\n- Competitor B: Analytics platforms\\n\\n## Market Opportunity\\nSignificant demand for customizable, real-time data visualization solutions.\\n\\n## Recommendations\\n1. Focus on real-time capabilities\\n2. Ensure mobile responsiveness\\n3. Prioritize performance optimization",
+    "role": "assistant"
+  },
+  "pm": {
+    "content": "# Product Requirements Document\\n\\n## FR-1: User Authentication\\n### FR-1.1: Registration\\nUsers MUST be able to register with email and password.\\n\\n### FR-1.2: Login\\nUsers MUST be able to login with credentials.\\n\\n## FR-2: Dashboard\\n### FR-2.1: Statistics Display\\nDashboard MUST show user statistics.\\n\\n### FR-2.2: Activity Feed\\nRecent activity MUST be displayed in chronological order.\\n\\n## FR-3: Data Visualization\\n### FR-3.1: Charts\\nSystem MUST support multiple chart types (line, bar, pie).\\n\\n### FR-3.2: Export\\nUsers MUST be able to export charts as PNG/SVG.",
+    "role": "assistant"
+  },
+  "architect": {
+    "content": "# Technical Architecture\\n\\n## System Design\\n### Frontend Architecture\\n- React 19 with TypeScript\\n- Component-based architecture\\n- State management: React Context + hooks\\n\\n### Backend Architecture\\n- Fastify framework\\n- RESTful API design\\n- JWT-based authentication\\n\\n### Database Schema\\n```sql\\nCREATE TABLE users (\\n  id SERIAL PRIMARY KEY,\\n  email VARCHAR(255) UNIQUE,\\n  password_hash VARCHAR(255)\\n);\\n```\\n\\n## API Endpoints\\n- POST /api/auth/register\\n- POST /api/auth/login\\n- GET /api/dashboard/stats\\n- GET /api/charts/data",
+    "role": "assistant"
+  },
+  "scrum_master": {
+    "content": "# User Stories\\n\\n## Story 1: User Registration\\n**As a** new user  \\n**I want to** create an account  \\n**So that** I can access the platform\\n\\n**AC:**\\n- [ ] Registration form with email and password\\n- [ ] Email validation\\n- [ ] Password strength indicator\\n\\n## Story 2: User Login\\n**As a** registered user  \\n**I want to** login to my account  \\n**So that** I can access my dashboard\\n\\n**AC:**\\n- [ ] Login form\\n- [ ] Session management\\n- [ ] Remember me option\\n\\n## Story 3: Dashboard Statistics\\n**As a** logged-in user  \\n**I want to** view my statistics  \\n**So that** I can track my progress\\n\\n**AC:**\\n- [ ] Display key metrics\\n- [ ] Real-time updates\\n- [ ] Responsive layout",
+    "role": "assistant"
+  }
+}

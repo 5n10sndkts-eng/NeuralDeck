@@ -10,11 +10,29 @@ View your app in AI Studio: https://ai.studio/apps/drive/1ZLrjIhL_nC3HAAVHOWooLX
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** # NeuralDeck v2.0 (Neon Prime)
 
+> **"The Deck is your weapon. The Agents are your crew."**
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+NeuralDeck is a high-fidelity **AI Agent Workstation** built with React, Vite, and Fastify. It combines premium "Corporate Cyberpunk" aesthetics with powerful local LLM orchestration.
+
+## 🌟 Features
+
+*   **Neon Prime UI:** A sleek, glassmorphic "Cockpit" interface with dynamic lighting and Framer Motion animations.
+*   **Neural Swarm:** Autonomous agent coordination via a state machine.
+*   **Local RAG:** In-memory vector store for context injection (`@xenova/transformers`).
+*   **The Construct:** File system management and code visualization.
+*   **CyberTerminal:** Integrated CLI for system commands and chat.
+
+## 🚀 Quick Start
+
+1.  **Start the Backend:**
+    ```bash
+    node server.cjs
+    ```
+2.  **Start the Frontend:**
+    ```bash
+    npm run dev
+    ```
+3.  **Access the Deck:**
+    Open `http://localhost:3002` (or the port shown in your terminal).

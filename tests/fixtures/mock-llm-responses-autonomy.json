@@ -1,0 +1,79 @@
+{
+  "analyst": {
+    "response": "Analysis complete. Project brief created with key requirements identified.",
+    "files": [
+      {
+        "path": "docs/project-brief.md",
+        "content": "# Project Brief\n\n## Overview\nThis project requires implementation of 5 core features.\n\n## Key Requirements\n- User authentication\n- Dashboard display\n- Data export\n- Settings management\n- Notification system"
+      }
+    ]
+  },
+  "pm": {
+    "response": "PRD generated with 5 functional requirements and acceptance criteria.",
+    "files": [
+      {
+        "path": "docs/prd.md",
+        "content": "# Product Requirements Document\n\n## Functional Requirements\n- FR-1: User authentication\n- FR-2: Dashboard display\n- FR-3: Data export\n- FR-4: Settings management\n- FR-5: Notification system"
+      }
+    ]
+  },
+  "architect": {
+    "response": "Architecture designed. System components defined with clear boundaries.",
+    "files": [
+      {
+        "path": "docs/architecture.md",
+        "content": "# Architecture Document\n\n## Components\n- Frontend: React + Vite\n- Backend: Node.js + Fastify\n- Database: In-memory for MVP"
+      }
+    ]
+  },
+  "scrumMaster": {
+    "response": "5 stories created with acceptance criteria.",
+    "files": [
+      {
+        "path": "stories/story-1.md",
+        "content": "# Story 1: User Authentication\n\n## Acceptance Criteria\n- User can log in\n- User can log out\n- Session persists"
+      },
+      {
+        "path": "stories/story-2.md",
+        "content": "# Story 2: Dashboard Display\n\n## Acceptance Criteria\n- Dashboard loads\n- Data displays correctly\n- Updates in real-time"
+      },
+      {
+        "path": "stories/story-3.md",
+        "content": "# Story 3: Data Export\n\n## Acceptance Criteria\n- User can export data\n- Export formats supported\n- Export completes successfully"
+      },
+      {
+        "path": "stories/story-4.md",
+        "content": "# Story 4: Settings Management\n\n## Acceptance Criteria\n- User can update settings\n- Settings persist\n- Settings apply immediately"
+      },
+      {
+        "path": "stories/story-5.md",
+        "content": "# Story 5: Notification System\n\n## Acceptance Criteria\n- Notifications display\n- Notifications are dismissible\n- Notification history available"
+      }
+    ]
+  },
+  "developer": {
+    "response": "Implementation complete. Code files created with tests.",
+    "files": [
+      {
+        "path": "src/components/Auth.tsx",
+        "content": "// Authentication component implementation"
+      },
+      {
+        "path": "src/components/Dashboard.tsx",
+        "content": "// Dashboard component implementation"
+      },
+      {
+        "path": "src/utils/export.ts",
+        "content": "// Data export utility implementation"
+      },
+      {
+        "path": "src/components/Settings.tsx",
+        "content": "// Settings component implementation"
+      },
+      {
+        "path": "src/components/Notifications.tsx",
+        "content": "// Notifications component implementation"
+      }
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+# generated: 2025-12-19
+# project: NeuralDeckProjects
+# project_key: NDP
+# tracking_system: file-system
+# story_location: docs/sprint-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2025-12-19
+project: NeuralDeckProjects
+project_key: NDP
+tracking_system: file-system
+story_location: docs/sprint-artifacts
+
+development_status:
+  # Epic 1: Core Infrastructure & Security Foundation
+  epic-1: in-progress
+  1-1-secure-backend-gateway: done
+  1-2-tool-execution-security: done
+  1-3-file-system-infrastructure: done
+  1-4-docker-integration: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Neural Circuit Visualization
+  epic-2: in-progress
+  2-1-visual-state-machine-with-reactflow: done
+  2-2-data-packet-animation: done
+  2-3-tool-execution-info-display: done
+  story-6-construct-3d: done
+  epic-2-retrospective: optional
+
+  # Epic 3: Omnipresence (Voice, Sound, Vision)
+  epic-3: in-progress
+  3-1-voice-command-core: done
+  3-2-generative-sonic-ambience: done
+  3-3-visual-input-drag-drop: done
+  epic-3-retrospective: optional
+
+  # Epic 4: Developer Swarm (Parallel Execution)
+  epic-4: in-progress
+  4-1-dynamic-developer-node-spawning: done
+  4-2-parallel-processing-engine: done
+  4-3-conflict-resolution-system: done
+  epic-4-retrospective: optional
+
+  # Epic 5: War Room Security Suite
+  epic-5: done
+  5-1-red-alert-mode-toggle: done
+  5-2-adversarial-red-team-agent-squad: done
+  5-3-threat-assessment-dashboard: done
+  epic-5-retrospective: optional
+
+  # Epic 6: Production Hardening & Intelligence
+  epic-6: in-progress
+  6-1-codebase-rag-indexing-system: done
+  6-2-conversation-persistence: ready-for-dev
+  6-3-performance-optimization-code-splitting: ready-for-dev
+  6-4-security-hardening: ready-for-dev
+  6-5-list-virtualization: ready-for-dev
+  6-6-websocket-reconnection-delta-updates: ready-for-dev
+  6-7-code-diff-visualization: ready-for-dev
+  6-8-checkpoint-undo-system: ready-for-dev
+  epic-6-retrospective: optional
+
+  # Legacy Stories (from previous epic numbering system)
+  # Note: These stories are completed but don't match current epic structure
+  story-9-voice-command-core: done
+  story-10-visual-input-drag-drop: done
+  story-11-generative-sonic-ambience: done

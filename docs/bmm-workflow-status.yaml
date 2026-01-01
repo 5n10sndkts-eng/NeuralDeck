@@ -58,12 +58,14 @@ workflow_status:
           agent: "pm"
           command: "prd"
           output: "Product Requirements Document with FRs and NFRs"
+          status: "docs/prd.md"
   
         - id: "create-ux-design"
           conditional: "if_has_ui"
           agent: "ux-designer"
           command: "create-ux-design"
           note: "Determined after PRD - user/agent decides if needed"
+          status: "docs/ux-design-specification.md"
   
     - phase: 2
       name: "Solutioning"
@@ -75,12 +77,14 @@ workflow_status:
           command: "create-architecture"
           output: "System architecture document"
           note: "Complete system design for greenfield projects"
+          status: "docs/architecture.md"
   
         - id: "create-epics-and-stories"
           required: true
           agent: "pm"
           command: "create-epics-and-stories"
           note: "Required: Break down PRD into implementable epics and stories with full context (PRD + UX + Architecture)"
+          status: "docs/epic-2-construct.md"
   
         - id: "test-design"
           recommended: true

@@ -2,18 +2,18 @@
 
 **Role:** Full Stack Developer
 **Feature:** Autonomous Agent Logic
-**Status:** Todo
+**Status:** Done
 
 ## Description
 Implement the `useNeuralAutonomy` hook and the ReactFlow visualization to drive the autonomous workflow.
 
 ## Technical Tasks
-1.  [ ] Install `reactflow`.
-2.  [ ] Create `hooks/useNeuralAutonomy.ts`:
+1.  [x] Install `reactflow`.
+2.  [x] Create `hooks/useNeuralAutonomy.ts`:
     *   Implement State Machine: `IDLE` -> `ANALYST` -> `PM` -> `ARCHITECT`.
     *   Implement `pollFileSystem()`: Check for `project_brief.md`, `prd.md`, etc. via `/api/files`.
     *   Implement `triggerAgent()`: Call `/api/chat` with the specific Agent Persona.
-3.  [ ] Create `components/NeuralGrid.tsx`:
+3.  [x] Create `components/NeuralGrid.tsx`:
     *   Render the fixed node layout (Analyst -> PM -> Arch -> Scrum).
     *   Visualize state changes (dim vs. active nodes).
     *   Visualize "Data Packets" (animated edges) when files are created.

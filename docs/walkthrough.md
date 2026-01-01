@@ -1,33 +1,52 @@
-# Walkthrough: Backend Core Activation
+# NeuralDeck: Project Launch Walkthrough
 
-**Status:** ✅ Complete
-**Date:** 2025-12-14
+## 🚀 System Status
+- **Backend:** Online (`http://localhost:3001`)
+- **Frontend:** Online (`http://localhost:3002`)
+- **Autonomy Engine:** Active
+- **RAG Engine:** Integrated (Local/In-Memory)
+- **3D Engine:** Online (The Construct)
 
-## 1. Modifications Implemented
-We have successfully migrated the backend from Express to **Fastify** and hardened it with a Cyberpunk-grade security suite.
+## 🏗️ Architecture Implemented
+### 1. The Core (Backend)
+- **Fastify Server:** Replaced Express for performance.
+- **Security:** Helmet, CORS, Rate Limiting active.
+- **API Gateway:** Proxies requests to Local LLM or OpenAI.
+- **Safe Shell:** Whitelisted command execution.
 
-### Core Files
-- **`server.cjs`** (formerly `server.js`):
-    - **Fastify:** High-performance server instance.
-    - **Security:** Helmet (Headers), Cors (Origins), Rate Limit (1000 req/min).
-    - **API Gateway:** Proxies `/api/chat` to Local LLMs or OpenAI.
-    - **Safe Shell:** Whitelisted command execution (`git`, `npm`).
-- **`server/lib/rag.cjs`**:
-    - Local RAG engine using LangChain + Xenova Transformers.
+### 2. The Interface (Frontend)
+- **Cyberpunk UI:** Custom design system (Neon/Glass).
+- **# NeuralDeck v2.0 - Walkthrough & User Guide
 
-### Fixes Applied
-- **Module Resolution:** Renamed `server.js` -> `server.cjs` to resolve ESM/CommonJS conflicts with `project.json` (`"type": "module"`).
+## 1. System Overview
+**NeuralDeck** is an advanced AI Agent Workstation designed for "Cyberpunk 2099". It features a **"Neon Prime"** glassmorphic interface, a local RAG engine, and a neural autonomy system ("The Swarm").
 
-## 2. Verification Results
-We verified the system health via `curl`:
+## 2. Key Features
+*   **Cockpit Interface:** A floating dock and HUD layout for immersive control.
+*   **Neon Prime Aesthetics:** Dynamic HSL-based lighting, holographic panels, and glitch effects.
+*   **Neural Autonomy:** A background state machine that manages agent lifecycles (`useNeuralAutonomy`).
+*   **RAG Engine:** Local vector memory for context-aware chat.
+*   **The Terminal:** A command-line interface for direct system interaction.
+*   **The Construct (3D):** Immersive 3D data visualization (`CyberVerse`).
+- **Agent System:** Specialized prompts for Analyst, PM, Architect, and Dev.
 
-```bash
-$ curl http://localhost:3001/health
-> {"status":"ONLINE","uptime":2.01,"version":"2.0.0-CYBER-FASTIFY"}
-```
+## 🕹️ User Guide
+1.  **Start the System:**
+    ```bash
+    npm run dev  # Starts Vite Frontend
+    node server.cjs # Starts Fastify Backend
+    ```
+2.  **Access the Deck:**
+    - Go to `http://localhost:3002`.
+    - Check the **"Neural Orchestrator"** tab to see the Swarm in action.
+    - Click the **Server/Database Icon ("Immerse")** in the Dock to enter **The Construct**.
+3.  **Trigger Autonomy:**
+    - Click **"Auto-Run"** in the top right to let agents self-drive.
+    - Or manually select an agent (e.g., "The Analyst") and chat in the Terminal.
 
-## 3. Deployment Notes
-- **Backend:** `node server.cjs` (Port 3001)
-- **Frontend:** `npm run dev` (Port 3002)
-- **Access:** Open `http://localhost:3002` in Chrome.
-
+## ✅ Verification
+- [x] Backend Health Check (`/health`)
+- [x] Frontend Loads without Errors
+- [x] Audio System works (after interaction)
+- [x] RAG Ingestion & Querying works
+- [x] 3D Construct (Immerse View) Renders

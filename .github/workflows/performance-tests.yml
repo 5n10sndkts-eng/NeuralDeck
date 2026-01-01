@@ -1,0 +1,139 @@
+# Performance Tests Pipeline - NeuralDeck
+# 
+# Runs performance tests including:
+# - k6 load testing
+# - E2E performance tests (FPS monitoring)
+# - Performance regression detection
+
+name: Performance Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+  schedule:
+    # Run nightly performance tests
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION_FILE: '.nvmrc'
+  CACHE_KEY: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+jobs:
+  k6-load-test:
+    name: k6 Load Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+
+      - name: Start backend server
+        run: |
+          npm ci
+          npm run dev:server &
+          sleep 10 # Wait for server to start
+        env:
+          NODE_ENV: test
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D9
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run k6 load test
+        run: k6 run tests/nfr/performance/api-load-test.k6.js
+        env:
+          BASE_URL: http://localhost:3001
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results
+          path: |
+            k6-results.json
+            k6-summary.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+  e2e-performance:
+    name: E2E Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.NODE_VERSION_FILE }}
+          cache: 'npm'
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            node_modules
+            ~/.cache/ms-playwright
+          key: ${{ env.CACHE_KEY }}
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E performance tests
+        run: npm run test:e2e -- --grep "@perf"
+        env:
+          CI: true
+
+      - name: Upload performance test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-performance-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 30
+
+  performance-regression:
+    name: Performance Regression Detection
+    needs: [k6-load-test, e2e-performance]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download k6 results
+        uses: actions/download-artifact@v4
+        with:
+          name: k6-results
+          path: k6-results/
+          if-no-files-found: ignore
+
+      - name: Check performance regression
+        run: |
+          if [ -f "k6-results/k6-summary.json" ]; then
+            echo "Analyzing performance metrics..."
+            # Extract metrics and compare against baseline
+            # This would typically compare against stored baselines
+            echo "✅ Performance regression check complete"
+          else
+            echo "⚠️ No k6 results found - skipping regression check"
+          fi

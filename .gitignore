@@ -1,1 +1,28 @@
 node_modules
+
+# Environment variables (API keys, secrets)
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist
+coverage
+
+# Logs
+*.log
+npm-debug.log*
+server.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+*~
+.cursor
