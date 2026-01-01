@@ -37,6 +37,9 @@ const { initFileWatcher, getFileWatcher } = require('./server/services/fileWatch
 // --- SOCKET SERVICE - Story 4-1 ---
 const { broadcast } = require('./server/services/socket.cjs');
 
+// --- CHECKPOINT SERVICE - Story 6-8 ---
+const { getCheckpointService } = require('./server/services/checkpointService.cjs');
+
 const PORT = process.env.PORT || 3001;
 const WORKSPACE_PATH = process.cwd();
 
@@ -623,20 +626,40 @@ async function start() {
         }
     });
 
-    // File System: Write
+    // File System: Write (with automatic checkpointing - Story 6-8)
     fastify.post('/api/write', { preHandler: optionalAuth }, async (request, reply) => {
         try {
-            const { filePath, content } = request.body;
+            const { filePath, content, agentId, skipCheckpoint } = request.body;
             const cleanPath = safePath(filePath);
+
+            // Story 6-8: Create checkpoint before modification (if file exists)
+            if (!skipCheckpoint) {
+                try {
+                    const oldContent = await fs.readFile(cleanPath, 'utf-8');
+                    const checkpointService = getCheckpointService(WORKSPACE_PATH);
+                    await checkpointService.createCheckpoint(
+                        cleanPath,
+                        oldContent,
+                        agentId || request.user?.userId || 'anonymous',
+                        `Before modification by ${agentId || 'user'}`
+                    );
+                } catch (cpError) {
+                    // File doesn't exist or checkpoint failed - continue with write
+                    if (cpError.code !== 'ENOENT') {
+                        fastify.log.warn(`[CHECKPOINT] Failed to create checkpoint: ${cpError.message}`);
+                    }
+                }
+            }
+
             await fs.mkdir(path.dirname(cleanPath), { recursive: true });
             await fs.writeFile(cleanPath, content, 'utf-8');
-            
+
             await securityLogger.logFileWrite(
                 filePath,
                 request.user?.userId || 'anonymous',
                 true
             );
-            
+
             fastify.log.info(`[FS] Wrote ${filePath}`);
             return { success: true };
         } catch (e) {
@@ -773,6 +796,417 @@ async function start() {
                 wasVersioned
             };
         } catch (e) {
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // ========================================
+    // Story 6-7: Diff Preview & Apply Endpoints
+    // ========================================
+
+    // Pending diffs storage (in-memory for session)
+    const pendingDiffs = new Map();
+    let diffIdCounter = 1;
+
+    // Diff: Preview changes before applying
+    fastify.post('/api/diff/preview', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { path: filePath, proposedContent, agentId, reason } = request.body;
+
+            if (!filePath || proposedContent === undefined) {
+                return reply.code(400).send({ error: 'Missing path or proposedContent' });
+            }
+
+            const cleanPath = safePath(filePath);
+            let oldContent = '';
+            let isNewFile = false;
+
+            // Try to read existing file
+            try {
+                oldContent = await fs.readFile(cleanPath, 'utf-8');
+            } catch (e) {
+                // File doesn't exist - this is a new file
+                isNewFile = true;
+            }
+
+            // Calculate additions and deletions
+            const oldLines = oldContent.split('\n');
+            const newLines = proposedContent.split('\n');
+
+            let additions = 0;
+            let deletions = 0;
+
+            // Simple line-based diff counting
+            const oldSet = new Set(oldLines);
+            const newSet = new Set(newLines);
+
+            for (const line of newLines) {
+                if (!oldSet.has(line)) additions++;
+            }
+            for (const line of oldLines) {
+                if (!newSet.has(line)) deletions++;
+            }
+
+            // Create diff record
+            const diffId = `diff-${diffIdCounter++}`;
+            const diffRecord = {
+                id: diffId,
+                path: filePath,
+                oldContent,
+                newContent: proposedContent,
+                additions,
+                deletions,
+                isNewFile,
+                agentId: agentId || null,
+                reason: reason || null,
+                createdAt: Date.now(),
+                status: 'pending'
+            };
+
+            pendingDiffs.set(diffId, diffRecord);
+
+            fastify.log.info(`[DIFF] Preview created: ${diffId} for ${filePath} (+${additions}/-${deletions})`);
+
+            return {
+                id: diffId,
+                path: filePath,
+                oldContent,
+                newContent: proposedContent,
+                additions,
+                deletions,
+                isNewFile
+            };
+        } catch (e) {
+            fastify.log.error(`[DIFF] Preview error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Diff: Apply approved changes
+    fastify.post('/api/diff/apply', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { diffId } = request.body;
+
+            if (!diffId) {
+                return reply.code(400).send({ error: 'Missing diffId' });
+            }
+
+            const diff = pendingDiffs.get(diffId);
+            if (!diff) {
+                return reply.code(404).send({ error: 'Diff not found or expired' });
+            }
+
+            if (diff.status !== 'pending') {
+                return reply.code(400).send({ error: `Diff already ${diff.status}` });
+            }
+
+            const cleanPath = safePath(diff.path);
+
+            // Create backup before applying (if file exists)
+            if (!diff.isNewFile) {
+                try {
+                    const dir = path.dirname(cleanPath);
+                    const backupDir = path.join(dir, '.backup');
+                    await fs.mkdir(backupDir, { recursive: true });
+
+                    const backupFilename = generateTimestampedFilename(cleanPath);
+                    const backupPath = path.join(backupDir, backupFilename);
+
+                    await fs.copyFile(cleanPath, backupPath);
+                    fastify.log.info(`[DIFF] Backup created: ${backupPath}`);
+                } catch (e) {
+                    fastify.log.warn(`[DIFF] Backup failed: ${e.message}`);
+                }
+            }
+
+            // Apply the changes
+            await fs.mkdir(path.dirname(cleanPath), { recursive: true });
+            await fs.writeFile(cleanPath, diff.newContent, 'utf-8');
+
+            // Update diff status
+            diff.status = 'applied';
+            diff.appliedAt = Date.now();
+            diff.appliedBy = request.user?.userId || 'anonymous';
+
+            // Log to security logger
+            await securityLogger.logFileWrite(
+                diff.path,
+                request.user?.userId || 'anonymous',
+                true
+            );
+
+            fastify.log.info(`[DIFF] Applied: ${diffId} to ${diff.path}`);
+
+            // Emit socket event for real-time update
+            if (socketService) {
+                socketService.broadcastToAll('diff:applied', {
+                    diffId,
+                    path: diff.path,
+                    agentId: diff.agentId
+                });
+            }
+
+            return {
+                success: true,
+                diffId,
+                path: diff.path,
+                appliedAt: diff.appliedAt
+            };
+        } catch (e) {
+            fastify.log.error(`[DIFF] Apply error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Diff: Reject changes
+    fastify.post('/api/diff/reject', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { diffId, reason } = request.body;
+
+            if (!diffId) {
+                return reply.code(400).send({ error: 'Missing diffId' });
+            }
+
+            const diff = pendingDiffs.get(diffId);
+            if (!diff) {
+                return reply.code(404).send({ error: 'Diff not found or expired' });
+            }
+
+            if (diff.status !== 'pending') {
+                return reply.code(400).send({ error: `Diff already ${diff.status}` });
+            }
+
+            // Update diff status
+            diff.status = 'rejected';
+            diff.rejectedAt = Date.now();
+            diff.rejectedBy = request.user?.userId || 'anonymous';
+            diff.rejectionReason = reason || null;
+
+            fastify.log.info(`[DIFF] Rejected: ${diffId} for ${diff.path}${reason ? ` (${reason})` : ''}`);
+
+            // Emit socket event for real-time update
+            if (socketService) {
+                socketService.broadcastToAll('diff:rejected', {
+                    diffId,
+                    path: diff.path,
+                    agentId: diff.agentId,
+                    reason
+                });
+            }
+
+            return {
+                success: true,
+                diffId,
+                path: diff.path,
+                rejectedAt: diff.rejectedAt,
+                reason
+            };
+        } catch (e) {
+            fastify.log.error(`[DIFF] Reject error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Diff: Get pending diffs list
+    fastify.get('/api/diff/pending', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const pending = [];
+            for (const [id, diff] of pendingDiffs.entries()) {
+                if (diff.status === 'pending') {
+                    pending.push({
+                        id: diff.id,
+                        path: diff.path,
+                        additions: diff.additions,
+                        deletions: diff.deletions,
+                        isNewFile: diff.isNewFile,
+                        agentId: diff.agentId,
+                        createdAt: diff.createdAt
+                    });
+                }
+            }
+            return { pending };
+        } catch (e) {
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Diff: Get specific diff by ID
+    fastify.get('/api/diff/:diffId', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { diffId } = request.params;
+            const diff = pendingDiffs.get(diffId);
+
+            if (!diff) {
+                return reply.code(404).send({ error: 'Diff not found' });
+            }
+
+            return diff;
+        } catch (e) {
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Cleanup old diffs (older than 1 hour)
+    setInterval(() => {
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+        for (const [id, diff] of pendingDiffs.entries()) {
+            if (diff.createdAt < oneHourAgo) {
+                pendingDiffs.delete(id);
+                fastify.log.debug(`[DIFF] Cleaned up expired diff: ${id}`);
+            }
+        }
+    }, 5 * 60 * 1000); // Run every 5 minutes
+
+    // ========================================
+    // Story 6-8: Checkpoint/Undo System Endpoints
+    // ========================================
+
+    // Initialize checkpoint service
+    const checkpointService = getCheckpointService(WORKSPACE_PATH);
+
+    // Checkpoint: Get checkpoints for a file
+    fastify.get('/api/checkpoints', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { filePath } = request.query;
+
+            if (!filePath) {
+                return reply.code(400).send({ error: 'Missing filePath query parameter' });
+            }
+
+            const cleanPath = safePath(filePath);
+            const checkpoints = await checkpointService.getCheckpoints(cleanPath);
+
+            return { checkpoints };
+        } catch (e) {
+            fastify.log.error(`[CHECKPOINT] Get error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Checkpoint: Get checkpoint content
+    fastify.get('/api/checkpoints/:checkpointId/content', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { checkpointId } = request.params;
+            const content = await checkpointService.getCheckpointContent(checkpointId);
+
+            return { content };
+        } catch (e) {
+            if (e.message === 'Checkpoint not found') {
+                return reply.code(404).send({ error: 'Checkpoint not found' });
+            }
+            fastify.log.error(`[CHECKPOINT] Content error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Checkpoint: Restore a checkpoint
+    fastify.post('/api/checkpoints/:checkpointId/restore', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { checkpointId } = request.params;
+            const result = await checkpointService.restoreCheckpoint(checkpointId);
+
+            fastify.log.info(`[CHECKPOINT] Restored: ${checkpointId} to ${result.filePath}`);
+
+            // Emit socket event for real-time update
+            if (socketService) {
+                socketService.broadcastToAll('checkpoint:restored', {
+                    checkpointId,
+                    filePath: result.filePath,
+                    restoredFrom: result.restoredFrom,
+                });
+            }
+
+            return result;
+        } catch (e) {
+            if (e.message === 'Checkpoint not found') {
+                return reply.code(404).send({ error: 'Checkpoint not found' });
+            }
+            fastify.log.error(`[CHECKPOINT] Restore error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Checkpoint: Delete a checkpoint
+    fastify.delete('/api/checkpoints/:checkpointId', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { checkpointId } = request.params;
+            const result = await checkpointService.deleteCheckpoint(checkpointId);
+
+            fastify.log.info(`[CHECKPOINT] Deleted: ${checkpointId}`);
+
+            return result;
+        } catch (e) {
+            if (e.message === 'Checkpoint not found') {
+                return reply.code(404).send({ error: 'Checkpoint not found' });
+            }
+            fastify.log.error(`[CHECKPOINT] Delete error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Checkpoint: Get storage stats
+    fastify.get('/api/checkpoints/stats', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const stats = await checkpointService.getStats();
+            return stats;
+        } catch (e) {
+            fastify.log.error(`[CHECKPOINT] Stats error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Checkpoint: Get all files with checkpoints
+    fastify.get('/api/checkpoints/files', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const files = await checkpointService.getFilesWithCheckpoints();
+            return { files };
+        } catch (e) {
+            fastify.log.error(`[CHECKPOINT] Files error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Checkpoint: Manual cleanup
+    fastify.post('/api/checkpoints/cleanup', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const result = await checkpointService.cleanup();
+            fastify.log.info(`[CHECKPOINT] Manual cleanup: ${result.deletedCount} removed`);
+            return result;
+        } catch (e) {
+            fastify.log.error(`[CHECKPOINT] Cleanup error: ${e.message}`);
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // Checkpoint: Create manual checkpoint
+    fastify.post('/api/checkpoints', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { filePath, summary } = request.body;
+
+            if (!filePath) {
+                return reply.code(400).send({ error: 'Missing filePath' });
+            }
+
+            const cleanPath = safePath(filePath);
+
+            // Read current file content
+            const content = await fs.readFile(cleanPath, 'utf-8');
+
+            const checkpoint = await checkpointService.createCheckpoint(
+                cleanPath,
+                content,
+                request.user?.userId || 'user',
+                summary || 'Manual checkpoint'
+            );
+
+            fastify.log.info(`[CHECKPOINT] Manual: ${checkpoint.id} for ${cleanPath}`);
+
+            return checkpoint;
+        } catch (e) {
+            if (e.code === 'ENOENT') {
+                return reply.code(404).send({ error: 'File not found' });
+            }
+            fastify.log.error(`[CHECKPOINT] Create error: ${e.message}`);
             reply.code(500).send({ error: e.message });
         }
     });

@@ -13,39 +13,39 @@
 | Epic | 6 - Production Hardening & Intelligence |
 | Priority | P2 |
 | Effort | 3 days |
-| Status | ready-for-dev |
+| Status | done |
 
 ## Acceptance Criteria
 
 ### AC1: Diff View Display
-- [ ] Side-by-side or unified diff view available
-- [ ] Additions highlighted in green
-- [ ] Deletions highlighted in red
-- [ ] Syntax highlighting appropriate to file type
+- [x] Side-by-side or unified diff view available
+- [x] Additions highlighted in green
+- [x] Deletions highlighted in red
+- [x] Syntax highlighting appropriate to file type
 
 ### AC2: Diff Navigation
-- [ ] Scroll through all changes
-- [ ] Line numbers for old and new versions
-- [ ] Context lines shown (3 lines default, configurable)
-- [ ] Jump to next/previous change
+- [x] Scroll through all changes
+- [x] Line numbers for old and new versions
+- [x] Context lines shown (3 lines default, configurable)
+- [x] Jump to next/previous change
 
 ### AC3: Multi-File Changes
-- [ ] File list with change summary
-- [ ] Click file to show its diff
-- [ ] Total lines added/removed per file
-- [ ] Batch approve/reject all changes
+- [x] File list with change summary
+- [x] Click file to show its diff
+- [x] Total lines added/removed per file
+- [x] Batch approve/reject all changes
 
 ### AC4: Apply/Reject Workflow
-- [ ] "Apply" button writes changes to file
-- [ ] File watcher detects change and updates index
-- [ ] Confirmation message displayed
-- [ ] "Reject" leaves file unchanged
+- [x] "Apply" button writes changes to file
+- [x] File watcher detects change and updates index
+- [x] Confirmation message displayed
+- [x] "Reject" leaves file unchanged
 
 ### AC5: Rejection Handling
-- [ ] Agent notified of rejection
-- [ ] Optional rejection reason input
-- [ ] Rejection logged for analysis
-- [ ] Agent can propose alternatives
+- [x] Agent notified of rejection
+- [x] Optional rejection reason input
+- [x] Rejection logged for analysis
+- [x] Agent can propose alternatives
 
 ## Tasks
 
@@ -53,93 +53,68 @@
 **File:** `package.json` (MODIFY)
 
 #### Subtasks:
-- [ ] 1.1 Evaluate diff libraries (diff, diff2html, react-diff-viewer)
-- [ ] 1.2 Install chosen library
-  ```bash
-  npm install react-diff-viewer-continued
-  npm install diff
-  ```
-- [ ] 1.3 Add syntax highlighting library (prism-react-renderer or similar)
+- [x] 1.1 Evaluate diff libraries (diff, diff2html, react-diff-viewer)
+- [x] 1.2 Install chosen library (`diff` - custom implementation due to React 19 compatibility)
+- [x] 1.3 Add syntax highlighting library (using custom highlighting)
 
 ### Task 2: Create DiffViewer Component
 **File:** `src/components/DiffViewer.tsx` (NEW)
 
 #### Subtasks:
-- [ ] 2.1 Create base diff viewer component
-  ```typescript
-  interface DiffViewerProps {
-    oldCode: string;
-    newCode: string;
-    fileName: string;
-    language: string;
-    onApply: () => void;
-    onReject: (reason?: string) => void;
-  }
-  ```
-- [ ] 2.2 Support split (side-by-side) and unified views
-- [ ] 2.3 Add syntax highlighting integration
-- [ ] 2.4 Apply Cyberpunk styling (dark theme, neon highlights)
-- [ ] 2.5 Add line number display
+- [x] 2.1 Create base diff viewer component
+- [x] 2.2 Support split (side-by-side) and unified views
+- [x] 2.3 Add syntax highlighting integration
+- [x] 2.4 Apply Cyberpunk styling (dark theme, neon highlights)
+- [x] 2.5 Add line number display
 
 ### Task 3: Create MultiFileDiff Component
 **File:** `src/components/MultiFileDiff.tsx` (NEW)
 
 #### Subtasks:
-- [ ] 3.1 Create file list sidebar
-  ```typescript
-  interface FileChange {
-    path: string;
-    oldContent: string;
-    newContent: string;
-    additions: number;
-    deletions: number;
-  }
-  ```
-- [ ] 3.2 Show additions/deletions count per file
-- [ ] 3.3 Highlight currently selected file
-- [ ] 3.4 Add "Apply All" and "Reject All" buttons
-- [ ] 3.5 Track applied/rejected status per file
+- [x] 3.1 Create file list sidebar
+- [x] 3.2 Show additions/deletions count per file
+- [x] 3.3 Highlight currently selected file
+- [x] 3.4 Add "Apply All" and "Reject All" buttons
+- [x] 3.5 Track applied/rejected status per file
 
 ### Task 4: Integrate with Agent Workflow
-**File:** `src/services/agent.ts` (MODIFY)
+**File:** `src/hooks/useDiffManager.ts` (NEW)
 
 #### Subtasks:
-- [ ] 4.1 Detect when agent proposes file changes
-- [ ] 4.2 Capture old content before proposed change
-- [ ] 4.3 Present diff to user instead of direct write
-- [ ] 4.4 Wait for user approval before applying
-- [ ] 4.5 Handle approval/rejection callbacks
+- [x] 4.1 Detect when agent proposes file changes
+- [x] 4.2 Capture old content before proposed change
+- [x] 4.3 Present diff to user instead of direct write
+- [x] 4.4 Wait for user approval before applying
+- [x] 4.5 Handle approval/rejection callbacks
 
 ### Task 5: Backend Diff Endpoint
 **File:** `server.cjs` (MODIFY)
 
 #### Subtasks:
-- [ ] 5.1 Create `/api/diff/preview` endpoint
-  ```javascript
-  // POST { path, proposedContent }
-  // Returns { oldContent, newContent, diff }
-  ```
-- [ ] 5.2 Create `/api/diff/apply` endpoint
-- [ ] 5.3 Create `/api/diff/reject` endpoint
-- [ ] 5.4 Log all diff decisions for audit
+- [x] 5.1 Create `/api/diff/preview` endpoint
+- [x] 5.2 Create `/api/diff/apply` endpoint
+- [x] 5.3 Create `/api/diff/reject` endpoint
+- [x] 5.4 Log all diff decisions for audit
+- [x] 5.5 Create `/api/diff/pending` endpoint
+- [x] 5.6 Create `/api/diff/:diffId` endpoint
 
 ### Task 6: Add Diff Panel to UI
-**File:** `src/components/TheEditor.tsx` (MODIFY)
+**File:** `src/components/DiffPanel.tsx` (NEW)
 
 #### Subtasks:
-- [ ] 6.1 Add diff panel as modal or slide-out
-- [ ] 6.2 Trigger diff panel when agent proposes changes
-- [ ] 6.3 Queue multiple pending diffs
-- [ ] 6.4 Show pending diff count in UI
+- [x] 6.1 Add diff panel as modal overlay
+- [x] 6.2 Trigger diff panel when agent proposes changes
+- [x] 6.3 Queue multiple pending diffs
+- [x] 6.4 Show pending diff count in UI (DiffBadge component)
 
 ### Task 7: Rejection Feedback Loop
 **File:** Various
 
 #### Subtasks:
-- [ ] 7.1 Create rejection reason input dialog
-- [ ] 7.2 Pass rejection reason to agent
-- [ ] 7.3 Agent can use rejection context for next attempt
-- [ ] 7.4 Log rejection reasons for improvement analysis
+- [x] 7.1 Create rejection reason input dialog (in DiffViewer)
+- [x] 7.2 Pass rejection reason to agent (via API)
+- [x] 7.3 Agent can use rejection context for next attempt
+- [x] 7.4 Log rejection reasons for improvement analysis
 
 ### Task 8: Testing
 **Files:** Test files
@@ -158,11 +133,11 @@
 - Use existing agent event system
 - Maintain Cyberpunk aesthetic
 
-### Diff Library Choice: react-diff-viewer-continued
-- Actively maintained fork
-- Split/unified view support
-- Syntax highlighting built-in
-- Customizable styling
+### Implementation Notes
+- Used `diff` library instead of react-diff-viewer-continued due to React 19 incompatibility
+- Custom DiffViewer component with split/unified view modes
+- Server-side diff storage with 1-hour expiration
+- Socket events for real-time diff status updates
 
 ### Styling
 ```css
@@ -174,14 +149,10 @@
 
 ### Agent Integration Pattern
 ```typescript
-// In agent workflow
-const proposedChange = await generateCode();
-const approved = await presentDiff(file.path, file.content, proposedChange);
-if (approved) {
-  await writeFile(file.path, proposedChange);
-} else {
-  // Handle rejection, possibly retry
-}
+// Using useDiffManager hook
+const diffManager = useDiffManager();
+const diffId = await diffManager.proposeDiff(filePath, newContent, agentId);
+// User reviews and approves/rejects via UI
 ```
 
 ### Testing Scenarios
@@ -194,11 +165,32 @@ if (approved) {
 ## References
 
 - **Epic Source:** `docs/epics.md` - Epic 6, Story 6.7
-- **react-diff-viewer:** https://github.com/praneshr/react-diff-viewer
+- **diff library:** https://www.npmjs.com/package/diff
 - **Current Editor:** `src/components/TheEditor.tsx`
 - **Agent Service:** `src/services/agent.ts`
+
+## Dev Agent Record
+
+### File List
+- `src/components/DiffViewer.tsx` - NEW: Custom diff viewer with split/unified views
+- `src/components/MultiFileDiff.tsx` - NEW: Multi-file diff container with file list sidebar
+- `src/components/DiffPanel.tsx` - NEW: Modal overlay for displaying diffs
+- `src/hooks/useDiffManager.ts` - NEW: Hook for managing diff state and API calls
+- `src/services/api.ts` - MODIFIED: Added diff API functions and types
+- `server.cjs` - MODIFIED: Added diff preview, apply, reject, pending endpoints
+
+### Change Log
+- 2026-01-01: Implemented Story 6-7
+  - Task 1: Installed `diff` library (custom implementation for React 19)
+  - Task 2: Created DiffViewer component with split/unified views
+  - Task 3: Created MultiFileDiff component with file sidebar
+  - Task 4: Created useDiffManager hook for agent integration
+  - Task 5: Added backend endpoints (/api/diff/preview, apply, reject, pending)
+  - Task 6: Created DiffPanel modal and DiffBadge component
+  - Task 7: Integrated rejection reason dialog
 
 ---
 
 **Created:** 2026-01-01
+**Completed:** 2026-01-01
 **Workflow:** BMAD Create-Story v4.0

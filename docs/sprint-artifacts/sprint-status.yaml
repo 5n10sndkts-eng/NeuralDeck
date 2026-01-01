@@ -84,8 +84,8 @@ development_status:
   6-3-performance-optimization-code-splitting: done
   6-4-security-hardening: done
   6-5-list-virtualization: done
-  6-6-websocket-reconnection-delta-updates: ready-for-dev
-  6-7-code-diff-visualization: ready-for-dev
+  6-6-websocket-reconnection-delta-updates: done
+  6-7-code-diff-visualization: done
   6-8-checkpoint-undo-system: ready-for-dev
   epic-6-retrospective: optional
 

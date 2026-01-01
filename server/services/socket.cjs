@@ -1,4 +1,5 @@
 const { Server } = require("socket.io");
+const { stateManager } = require('./stateManager.cjs');
 
 let io = null;
 let jwtSecret = null;
@@ -101,8 +102,36 @@ const initSocket = (httpServer, options = {}) => {
     io.on("connection", (socket) => {
         console.log(`[NEURAL CORTEX] Client Connected: ${socket.id} (user: ${socket.userId || 'anonymous'})`);
 
+        // Story 6-6: Send initial state snapshot on connection
+        socket.emit('state:snapshot', stateManager.getSnapshot());
+        console.log(`[NEURAL CORTEX] Sent state snapshot v${stateManager.getVersion()} to ${socket.id}`);
+
         socket.on("disconnect", () => {
             console.log(`[NEURAL CORTEX] Client Disconnected: ${socket.id}`);
+        });
+
+        // Story 6-6: Handle resync requests from reconnecting clients
+        socket.on("resync", (data) => {
+            const lastVersion = data?.lastVersion || 0;
+            console.log(`[NEURAL CORTEX] Resync requested from v${lastVersion} by ${socket.id}`);
+
+            const { deltas, fullResyncNeeded } = stateManager.getDeltasSince(lastVersion);
+
+            if (fullResyncNeeded) {
+                // Client is too far behind, send full snapshot
+                console.log(`[NEURAL CORTEX] Full resync needed for ${socket.id}`);
+                socket.emit('state:snapshot', stateManager.getSnapshot());
+            } else if (deltas.length > 0) {
+                // Send missed deltas
+                console.log(`[NEURAL CORTEX] Sending ${deltas.length} deltas to ${socket.id}`);
+                for (const delta of deltas) {
+                    socket.emit('state:delta', delta);
+                }
+            } else {
+                // Client is up to date
+                console.log(`[NEURAL CORTEX] Client ${socket.id} is up to date`);
+                socket.emit('state:sync-complete', { version: stateManager.getVersion() });
+            }
         });
 
         // Allow clients to emit agent events (if needed manually)
@@ -141,5 +170,17 @@ const broadcast = (event, data) => {
     }
 };
 
-module.exports = { initSocket, broadcast };
+// Story 6-6: Broadcast state delta to all clients
+const broadcastDelta = (delta) => {
+    if (io) {
+        io.emit('state:delta', delta);
+    }
+};
+
+// Story 6-6: Subscribe to state changes and broadcast deltas
+stateManager.subscribe((delta) => {
+    broadcastDelta(delta);
+});
+
+module.exports = { initSocket, broadcast, broadcastDelta, stateManager };
 

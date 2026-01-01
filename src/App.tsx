@@ -12,6 +12,7 @@ import { UIProvider, useUI } from './contexts/UIContext';
 import { ConversationProvider, useConversation } from './contexts/ConversationContext';
 import { HoloPanel } from './components/HoloPanel';
 import { useSocket } from './hooks/useSocket';
+import { ConnectionStatus } from './components/ConnectionStatus';
 import { MainLayout } from './components/MainLayout';
 import { CyberDock } from './components/CyberDock';
 import { TheOrchestrator } from './components/TheOrchestrator';
@@ -73,7 +74,10 @@ const AppContent: React.FC = () => {
 
     // --- UI CONTEXT (Adaptive) ---
     const { mode, isAlert, toggleAlert, setActiveAgents: setUIImplActiveAgents } = useUI();
-    const { phase, logs, activeAgents, isAutoMode, toggleAuto, currentThought } = useSocket(); // useSocket call moved to top
+    const {
+        phase, logs, activeAgents, isAutoMode, toggleAuto, currentThought,
+        connectionInfo, forceReconnect, forceReload  // Story 6-6
+    } = useSocket();
     
     // --- CONVERSATION CONTEXT ---
     const {
@@ -666,6 +670,13 @@ const AppContent: React.FC = () => {
                             <span className="font-display" style={{ fontWeight: 'bold', fontSize: '1.125rem', letterSpacing: '0.1em', color: 'white', lineHeight: 1 }}>NEURAL DECK</span>
                             <span className="font-mono" style={{ fontSize: '10px', color: 'var(--color-cyan)', letterSpacing: '0.3em', opacity: 0.8 }}>SYSTEM_ONLINE_V2.0</span>
                         </div>
+                        {/* Story 6-6: Connection Status Indicator */}
+                        <ConnectionStatus
+                            connectionInfo={connectionInfo}
+                            onReconnect={forceReconnect}
+                            onReload={forceReload}
+                            compact={true}
+                        />
                     </div>
 
                     {/* Council Section */}

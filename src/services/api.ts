@@ -123,3 +123,242 @@ export const sendChat = async (messages: ChatMessage[], config?: LlmConfig): Pro
     return { role: 'assistant', content: "SYSTEM ALERT: AI Offline or Connection Refused.", timestamp: Date.now() };
   }
 };
+
+// --- Story 6-7: DIFF PREVIEW & APPLY API ---
+
+export interface DiffPreviewRequest {
+  path: string;
+  proposedContent: string;
+  agentId?: string;
+  reason?: string;
+}
+
+export interface DiffPreviewResponse {
+  id: string;
+  path: string;
+  oldContent: string;
+  newContent: string;
+  additions: number;
+  deletions: number;
+  isNewFile: boolean;
+}
+
+export interface DiffRecord {
+  id: string;
+  path: string;
+  oldContent: string;
+  newContent: string;
+  additions: number;
+  deletions: number;
+  isNewFile: boolean;
+  agentId: string | null;
+  reason: string | null;
+  createdAt: number;
+  status: 'pending' | 'applied' | 'rejected';
+  appliedAt?: number;
+  appliedBy?: string;
+  rejectedAt?: number;
+  rejectedBy?: string;
+  rejectionReason?: string | null;
+}
+
+export interface PendingDiffSummary {
+  id: string;
+  path: string;
+  additions: number;
+  deletions: number;
+  isNewFile: boolean;
+  agentId: string | null;
+  createdAt: number;
+}
+
+// Create a diff preview for proposed changes
+export const createDiffPreview = async (request: DiffPreviewRequest): Promise<DiffPreviewResponse> => {
+  const res = await apiFetch(`${API_BASE}/diff/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to create diff preview');
+  }
+
+  return res.json();
+};
+
+// Apply a pending diff (write changes to file)
+export const applyDiff = async (diffId: string): Promise<{ success: boolean; path: string; appliedAt: number }> => {
+  const res = await apiFetch(`${API_BASE}/diff/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ diffId }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to apply diff');
+  }
+
+  return res.json();
+};
+
+// Reject a pending diff
+export const rejectDiff = async (diffId: string, reason?: string): Promise<{ success: boolean; path: string; rejectedAt: number }> => {
+  const res = await apiFetch(`${API_BASE}/diff/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ diffId, reason }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to reject diff');
+  }
+
+  return res.json();
+};
+
+// Get all pending diffs
+export const getPendingDiffs = async (): Promise<{ pending: PendingDiffSummary[] }> => {
+  const res = await apiFetch(`${API_BASE}/diff/pending`);
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get pending diffs');
+  }
+
+  return res.json();
+};
+
+// Get a specific diff by ID
+export const getDiff = async (diffId: string): Promise<DiffRecord> => {
+  const res = await apiFetch(`${API_BASE}/diff/${diffId}`);
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Diff not found');
+  }
+
+  return res.json();
+};
+
+// --- Story 6-8: CHECKPOINT/UNDO API ---
+
+export interface Checkpoint {
+  id: string;
+  filePath: string;
+  timestamp: number;
+  agentId: string | null;
+  summary: string;
+  contentHash: string;
+  size: number;
+}
+
+export interface CheckpointStats {
+  checkpointCount: number;
+  fileCount: number;
+  totalSizeBytes: number;
+  totalSizeMB: string;
+  maxStorageMB: number;
+}
+
+// Get checkpoints for a file
+export const getCheckpoints = async (filePath: string): Promise<{ checkpoints: Checkpoint[] }> => {
+  const res = await apiFetch(`${API_BASE}/checkpoints?filePath=${encodeURIComponent(filePath)}`);
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get checkpoints');
+  }
+
+  return res.json();
+};
+
+// Get checkpoint content
+export const getCheckpointContent = async (checkpointId: string): Promise<{ content: string }> => {
+  const res = await apiFetch(`${API_BASE}/checkpoints/${checkpointId}/content`);
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get checkpoint content');
+  }
+
+  return res.json();
+};
+
+// Restore a checkpoint
+export const restoreCheckpoint = async (checkpointId: string): Promise<{
+  success: boolean;
+  filePath: string;
+  restoredFrom: number;
+  checkpointId: string;
+}> => {
+  const res = await apiFetch(`${API_BASE}/checkpoints/${checkpointId}/restore`, {
+    method: 'POST',
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to restore checkpoint');
+  }
+
+  return res.json();
+};
+
+// Delete a checkpoint
+export const deleteCheckpoint = async (checkpointId: string): Promise<{ success: boolean }> => {
+  const res = await apiFetch(`${API_BASE}/checkpoints/${checkpointId}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to delete checkpoint');
+  }
+
+  return res.json();
+};
+
+// Create manual checkpoint
+export const createCheckpoint = async (filePath: string, summary?: string): Promise<Checkpoint> => {
+  const res = await apiFetch(`${API_BASE}/checkpoints`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filePath, summary }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to create checkpoint');
+  }
+
+  return res.json();
+};
+
+// Get checkpoint stats
+export const getCheckpointStats = async (): Promise<CheckpointStats> => {
+  const res = await apiFetch(`${API_BASE}/checkpoints/stats`);
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get checkpoint stats');
+  }
+
+  return res.json();
+};
+
+// Trigger manual cleanup
+export const cleanupCheckpoints = async (): Promise<{ deletedCount: number }> => {
+  const res = await apiFetch(`${API_BASE}/checkpoints/cleanup`, {
+    method: 'POST',
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to cleanup checkpoints');
+  }
+
+  return res.json();
+};

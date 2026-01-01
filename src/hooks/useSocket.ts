@@ -4,6 +4,56 @@ import { LogEntry, NeuralPhase } from './useNeuralAutonomy'; // Reuse types for 
 import { AgentProfile, AgentNodeState, VulnerabilityFinding, SecurityReport, VulnerabilitySeverity } from '../types';
 import { authService } from '../services/auth';
 
+// --- CONNECTION STATE TYPES (Story 6-6) ---
+
+export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'disconnected' | 'stale';
+
+export interface ConnectionInfo {
+    state: ConnectionState;
+    reconnectAttempt: number;
+    lastConnectedAt: number | null;
+    disconnectedAt: number | null;
+    reconnectCountdown: number | null;
+}
+
+// --- DELTA UPDATE TYPES (Story 6-6) ---
+
+export interface Delta<T> {
+    version: number;
+    timestamp: number;
+    changes: Partial<T>;
+    removals: string[];
+}
+
+export interface VersionedState {
+    version: number;
+    timestamp: number;
+}
+
+/**
+ * Apply a delta to a state object
+ * @param state - Current state
+ * @param delta - Delta to apply
+ * @returns New state with delta applied
+ */
+export function applyDelta<T extends object>(state: T, delta: Delta<Partial<T>>): T {
+    const newState = { ...state };
+
+    // Apply changes
+    if (delta.changes) {
+        Object.assign(newState, delta.changes);
+    }
+
+    // Apply removals
+    if (delta.removals) {
+        for (const key of delta.removals) {
+            delete (newState as Record<string, unknown>)[key];
+        }
+    }
+
+    return newState;
+}
+
 // --- SWARM EVENT TYPES (Story 4-2) ---
 
 export interface SwarmStartedEvent {
@@ -159,6 +209,19 @@ const initialSecurityState: SecurityScanState = {
     endTime: null,
 };
 
+// --- CONNECTION STATE (Story 6-6) ---
+
+const initialConnectionInfo: ConnectionInfo = {
+    state: 'disconnected',
+    reconnectAttempt: 0,
+    lastConnectedAt: null,
+    disconnectedAt: null,
+    reconnectCountdown: null,
+};
+
+// Stale connection threshold (5 minutes)
+const STALE_THRESHOLD_MS = 5 * 60 * 1000;
+
 // Swarm execution state for UI
 export interface SwarmExecutionState {
     executionId: string | null;
@@ -217,24 +280,122 @@ export const useSocket = () => {
     // Security Scan State (Story 5-3)
     const [securityState, setSecurityState] = useState<SecurityScanState>(initialSecurityState);
 
+    // Connection State (Story 6-6)
+    const [connectionInfo, setConnectionInfo] = useState<ConnectionInfo>(initialConnectionInfo);
+    const lastStateVersionRef = useRef<number>(0);
+    const staleCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const reconnectCountdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
     useEffect(() => {
-        // Connect to backend with JWT auth
+        // Connect to backend with JWT auth and exponential backoff (Story 6-6)
         const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
         const token = authService.getToken();
-        
+
+        // Story 6-6: Configure reconnection with exponential backoff
         const s = io(socketUrl, {
             auth: {
                 token: token || undefined
+            },
+            // Exponential backoff: 1s, 2s, 4s, 8s... max 30s
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 30000,
+            randomizationFactor: 0.5,
+            timeout: 20000,
+        });
+
+        // Story 6-6: Connection state tracking
+        setConnectionInfo(prev => ({ ...prev, state: 'connecting' }));
+
+        s.on('connect', () => {
+            console.log('[Socket] Connected successfully');
+            setIsConnected(true);
+            const now = Date.now();
+            setConnectionInfo({
+                state: 'connected',
+                reconnectAttempt: 0,
+                lastConnectedAt: now,
+                disconnectedAt: null,
+                reconnectCountdown: null,
+            });
+
+            // Clear any reconnect countdown interval
+            if (reconnectCountdownIntervalRef.current) {
+                clearInterval(reconnectCountdownIntervalRef.current);
+                reconnectCountdownIntervalRef.current = null;
+            }
+
+            // Story 6-6: Request resync with last known version
+            if (lastStateVersionRef.current > 0) {
+                console.log('[Socket] Requesting resync from version:', lastStateVersionRef.current);
+                s.emit('resync', { lastVersion: lastStateVersionRef.current });
+            } else {
+                // Request initial full state
+                s.emit('cmd:get_status');
             }
         });
 
-        s.on('connect', () => {
-            setIsConnected(true);
-            s.emit('cmd:get_status'); // Request initial state if we implemented that
+        s.on('disconnect', (reason) => {
+            console.log('[Socket] Disconnected:', reason);
+            setIsConnected(false);
+            const now = Date.now();
+            setConnectionInfo(prev => ({
+                ...prev,
+                state: 'disconnected',
+                disconnectedAt: now,
+            }));
         });
 
-        s.on('disconnect', () => setIsConnected(false));
-        
+        // Story 6-6: Track reconnection attempts
+        s.io.on('reconnect_attempt', (attempt) => {
+            console.log('[Socket] Reconnection attempt:', attempt);
+            setConnectionInfo(prev => ({
+                ...prev,
+                state: 'reconnecting',
+                reconnectAttempt: attempt,
+            }));
+
+            // Calculate next reconnect delay for countdown
+            const baseDelay = 1000;
+            const maxDelay = 30000;
+            const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
+
+            // Start countdown interval
+            if (reconnectCountdownIntervalRef.current) {
+                clearInterval(reconnectCountdownIntervalRef.current);
+            }
+
+            let countdown = Math.ceil(delay / 1000);
+            setConnectionInfo(prev => ({ ...prev, reconnectCountdown: countdown }));
+
+            reconnectCountdownIntervalRef.current = setInterval(() => {
+                countdown -= 1;
+                if (countdown <= 0) {
+                    if (reconnectCountdownIntervalRef.current) {
+                        clearInterval(reconnectCountdownIntervalRef.current);
+                        reconnectCountdownIntervalRef.current = null;
+                    }
+                    setConnectionInfo(prev => ({ ...prev, reconnectCountdown: null }));
+                } else {
+                    setConnectionInfo(prev => ({ ...prev, reconnectCountdown: countdown }));
+                }
+            }, 1000);
+        });
+
+        s.io.on('reconnect', (attempt) => {
+            console.log('[Socket] Reconnected after', attempt, 'attempts');
+        });
+
+        s.io.on('reconnect_failed', () => {
+            console.error('[Socket] Reconnection failed permanently');
+            setConnectionInfo(prev => ({
+                ...prev,
+                state: 'disconnected',
+                reconnectCountdown: null,
+            }));
+        });
+
         s.on('connect_error', (error) => {
             console.error('[Socket] Connection error:', error.message);
             // If auth error, try to create a session
@@ -246,6 +407,51 @@ export const useSocket = () => {
                     s.connect();
                 });
             }
+        });
+
+        // Story 6-6: Handle state snapshot (full state on connect/resync)
+        s.on('state:snapshot', (data: { version: number; timestamp: number; state: any }) => {
+            console.log('[Socket] Received state snapshot, version:', data.version);
+            lastStateVersionRef.current = data.version;
+
+            // Apply full state from snapshot
+            if (data.state) {
+                if (data.state.phase) {
+                    setPhase(data.state.phase);
+                }
+                if (typeof data.state.isAutoMode === 'boolean') {
+                    setIsAutoMode(data.state.isAutoMode);
+                }
+                // Additional state domains can be applied here as needed
+            }
+        });
+
+        // Story 6-6: Handle delta updates
+        s.on('state:delta', (delta: Delta<any> & { domain?: string }) => {
+            console.log('[Socket] Received delta update, version:', delta.version, 'domain:', delta.domain);
+
+            // Validate version sequence
+            if (delta.version !== lastStateVersionRef.current + 1) {
+                console.warn('[Socket] Version gap detected (expected:', lastStateVersionRef.current + 1, 'got:', delta.version, '), requesting resync');
+                s.emit('resync', { lastVersion: lastStateVersionRef.current });
+                return;
+            }
+
+            lastStateVersionRef.current = delta.version;
+
+            // Apply delta based on domain
+            if (delta.domain === 'phase' && delta.changes) {
+                setPhase(delta.changes as unknown as NeuralPhase);
+            } else if (delta.domain === 'isAutoMode' && typeof delta.changes === 'boolean') {
+                setIsAutoMode(delta.changes as boolean);
+            }
+            // Additional domain handlers can be added as needed
+        });
+
+        // Story 6-6: Handle sync complete acknowledgment
+        s.on('state:sync-complete', (data: { version: number }) => {
+            console.log('[Socket] Sync complete, at version:', data.version);
+            lastStateVersionRef.current = data.version;
         });
 
         // --- LISTENERS ---
@@ -498,8 +704,30 @@ export const useSocket = () => {
 
         setSocket(s);
 
+        // Story 6-6: Stale connection detection
+        staleCheckIntervalRef.current = setInterval(() => {
+            setConnectionInfo(prev => {
+                // Only check if disconnected (not already stale)
+                if ((prev.state === 'disconnected' || prev.state === 'reconnecting') && prev.disconnectedAt) {
+                    const duration = Date.now() - prev.disconnectedAt;
+                    if (duration >= STALE_THRESHOLD_MS) {
+                        console.warn('[Socket] Connection is stale (disconnected > 5 minutes)');
+                        return { ...prev, state: 'stale' };
+                    }
+                }
+                return prev;
+            });
+        }, 10000); // Check every 10 seconds
+
         return () => {
             s.disconnect();
+            // Clean up intervals
+            if (staleCheckIntervalRef.current) {
+                clearInterval(staleCheckIntervalRef.current);
+            }
+            if (reconnectCountdownIntervalRef.current) {
+                clearInterval(reconnectCountdownIntervalRef.current);
+            }
         };
     }, []);
 
@@ -654,6 +882,32 @@ export const useSocket = () => {
         setSecurityState(initialSecurityState);
     }, []);
 
+    // Story 6-6: Connection control functions
+    const forceReconnect = useCallback(() => {
+        if (socket) {
+            console.log('[Socket] Force reconnecting...');
+            socket.disconnect();
+            socket.connect();
+            setConnectionInfo(prev => ({
+                ...prev,
+                state: 'connecting',
+                reconnectAttempt: 0,
+            }));
+        }
+    }, [socket]);
+
+    const forceReload = useCallback(() => {
+        console.log('[Socket] Force reloading page...');
+        window.location.reload();
+    }, []);
+
+    const getDisconnectionDuration = useCallback(() => {
+        if (connectionInfo.disconnectedAt) {
+            return Date.now() - connectionInfo.disconnectedAt;
+        }
+        return 0;
+    }, [connectionInfo.disconnectedAt]);
+
     return {
         socket,
         isConnected,
@@ -685,5 +939,11 @@ export const useSocket = () => {
         getSecurityReport,
         updateFindingStatus,
         resetSecurityState,
+
+        // Connection management (Story 6-6)
+        connectionInfo,
+        forceReconnect,
+        forceReload,
+        getDisconnectionDuration,
     };
 };
