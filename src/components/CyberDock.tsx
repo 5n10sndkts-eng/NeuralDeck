@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Layout, Activity, KanbanSquare, Network, FlaskConical,
-    Database, Server, Layers, GitBranch, Settings
+    Database, Server, Layers, GitBranch, Settings, Users
 } from 'lucide-react';
 import { ViewMode } from '../types';
 import { useUI } from '../contexts/UIContext';
@@ -182,6 +182,7 @@ export const CyberDock: React.FC<CyberDockProps> = ({ activeView, onViewChange, 
                     />
 
                     <DockItem mode="laboratory" icon={FlaskConical} label="Laboratory" />
+                    <DockItem mode="roundtable" icon={Users} label="Roundtable" />
                     <DockItem mode="construct" icon={Database} label="Construct" />
                     <DockItem mode="construct-3d" icon={Server} label="Immerse" />
                     <DockItem mode="grid" icon={Layers} label="Grid" />
