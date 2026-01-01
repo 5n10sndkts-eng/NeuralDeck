@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
     Activity, Hexagon, Terminal as TerminalIcon, Play, Square, Layout,
     KanbanSquare, Database, FlaskConical, Network, Server,
@@ -16,29 +16,32 @@ import { MainLayout } from './components/MainLayout';
 import { CyberDock } from './components/CyberDock';
 import { TheOrchestrator } from './components/TheOrchestrator';
 
-// Components
+// Core Components (Always loaded)
 import TheTerminal from './components/TheTerminal';
 import NeuralLink from './components/NeuralLink';
-import NeuralGrid from './components/NeuralGrid';
-import TheConnections from './components/TheConnections';
 import TheEditor from './components/TheEditor';
 import TheCouncil from './components/TheCouncil';
-import TheBoard from './components/TheBoard';
-import TheConstruct from './components/TheConstruct';
-import TheLaboratory from './components/TheLaboratory';
-import TheRoundtable from './components/TheRoundtable';
-import TheSynapse from './components/TheSynapse';
-import TheGrid from './components/TheGrid';
-import TheGitLog from './components/TheGitLog';
 import CommandPalette from './components/CommandPalette';
 import { KeyboardHelp } from './components/KeyboardHelp';
-import { CyberPanel } from './components/CyberUI';
-import CyberVerse from './components/CyberVerse';
 import { VisionDropZone } from './components/VisionDropZone';
 import { VisionPreview } from './components/VisionPreview';
 import { VoiceVisualizer } from './components/VoiceVisualizer';
 import { VoiceCommandHelp } from './components/VoiceCommandHelp';
 import { AudioVisualizer } from './components/AudioVisualizer';
+import { LoadingSkeleton, ConstructLoadingSkeleton, GraphLoadingSkeleton } from './components/LoadingSkeleton';
+import { ChunkErrorBoundary } from './components/ChunkErrorBoundary';
+
+// Lazy-loaded Components (Heavy dependencies)
+const TheConstruct = lazy(() => import('./components/TheConstruct'));
+const CyberVerse = lazy(() => import('./components/CyberVerse'));
+const TheBoard = lazy(() => import('./components/TheBoard'));
+const TheSynapse = lazy(() => import('./components/TheSynapse'));
+const NeuralGrid = lazy(() => import('./components/NeuralGrid'));
+const TheConnections = lazy(() => import('./components/TheConnections'));
+const TheLaboratory = lazy(() => import('./components/TheLaboratory'));
+const TheRoundtable = lazy(() => import('./components/TheRoundtable'));
+const TheGrid = lazy(() => import('./components/TheGrid'));
+const TheGitLog = lazy(() => import('./components/TheGitLog'));
 
 // Hooks & Services
 import { useVoice } from './hooks/useVoiceInput';
@@ -540,15 +543,93 @@ const AppContent: React.FC = () => {
 
             case 'orchestrator': return <TheOrchestrator />;
 
-            case 'board': return <TheBoard files={files} onOpenFile={handleFileOpen} onUpdateFile={handleFileSave} />;
-            case 'synapse': return <TheSynapse files={files} onFileSelect={handleFileOpen} activeFile={activeFile} />;
-            case 'construct': return <TheConstruct />;
-            case 'construct-3d': return <CyberVerse files={files} onFileSelect={handleFileOpen} activeAgents={activeAgents} />;
-            case 'laboratory': return <TheLaboratory />;
-            case 'grid': return <TheGrid />;
-            case 'git': return <TheGitLog />;
-            case 'roundtable': return <TheRoundtable fileContents={fileContents} llmConfig={activeConfig} />;
-            case 'connections': return <TheConnections profiles={profiles} agentRouting={agentRouting} activeProfileId={activeProfileId} onUpdateProfiles={setProfiles} onUpdateRouting={setAgentRouting} onUpdateActiveProfile={setActiveProfileId} />;
+            case 'board': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<LoadingSkeleton message="LOADING NEURAL BOARD..." />}>
+                            <TheBoard files={files} onOpenFile={handleFileOpen} onUpdateFile={handleFileSave} />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'synapse': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<GraphLoadingSkeleton />}>
+                            <TheSynapse files={files} onFileSelect={handleFileOpen} activeFile={activeFile} />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'construct': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<ConstructLoadingSkeleton />}>
+                            <TheConstruct />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'construct-3d': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<ConstructLoadingSkeleton />}>
+                            <CyberVerse files={files} onFileSelect={handleFileOpen} activeAgents={activeAgents} />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'laboratory': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<LoadingSkeleton message="INITIALIZING LABORATORY..." />}>
+                            <TheLaboratory />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'grid': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<LoadingSkeleton message="LOADING GRID INTERFACE..." />}>
+                            <TheGrid />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'git': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<LoadingSkeleton message="LOADING GIT LOG..." />}>
+                            <TheGitLog />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'roundtable': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<LoadingSkeleton message="INITIALIZING ROUNDTABLE..." />}>
+                            <TheRoundtable fileContents={fileContents} llmConfig={activeConfig} />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
+
+            case 'connections': 
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<LoadingSkeleton message="LOADING CONNECTIONS..." />}>
+                            <TheConnections 
+                                profiles={profiles} 
+                                agentRouting={agentRouting} 
+                                activeProfileId={activeProfileId} 
+                                onUpdateProfiles={setProfiles} 
+                                onUpdateRouting={setAgentRouting} 
+                                onUpdateActiveProfile={setActiveProfileId} 
+                            />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
             default: return (
                 <div className="flex items-center justify-center h-full text-cyber-cyan opacity-50 font-mono">
                     MODULE_OFFLINE

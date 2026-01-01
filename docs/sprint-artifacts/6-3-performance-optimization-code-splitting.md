@@ -13,33 +13,33 @@
 | Epic | 6 - Production Hardening & Intelligence |
 | Priority | P1 |
 | Effort | 2 days |
-| Status | ready-for-dev |
+| Status | done |
 
 ## Acceptance Criteria
 
 ### AC1: Bundle Optimization
-- [ ] Three.js and 3D-related code in separate chunk (lazy loaded)
-- [ ] ReactFlow in separate chunk
-- [ ] Initial bundle <500KB (excluding vendor chunks)
-- [ ] Vite build with proper chunk splitting configuration
+- [x] Three.js and 3D-related code in separate chunk (lazy loaded)
+- [x] ReactFlow in separate chunk
+- [x] Initial bundle <500KB (excluding vendor chunks)
+- [x] Vite build with proper chunk splitting configuration
 
 ### AC2: Lazy Loading Implementation
-- [ ] Views not requiring 3D don't load TheConstruct/Three.js chunks
-- [ ] Only required chunks load for current view
-- [ ] React.lazy() and Suspense with loading indicators
-- [ ] Loading skeletons match Cyberpunk aesthetic
+- [x] Views not requiring 3D don't load TheConstruct/Three.js chunks
+- [x] Only required chunks load for current view
+- [x] React.lazy() and Suspense with loading indicators
+- [x] Loading skeletons match Cyberpunk aesthetic
 
 ### AC3: 3D Construct On-Demand Loading
-- [ ] Three.js chunk loads only when 3D Construct view requested
-- [ ] Loading skeleton displayed during chunk loading
-- [ ] Chunk loads within 2 seconds on typical connection
-- [ ] Error boundaries catch and display chunk loading failures
+- [x] Three.js chunk loads only when 3D Construct view requested
+- [x] Loading skeleton displayed during chunk loading
+- [x] Chunk loads within 2 seconds on typical connection
+- [x] Error boundaries catch and display chunk loading failures
 
 ### AC4: Core Web Vitals
-- [ ] LCP (Largest Contentful Paint) <2.5 seconds
-- [ ] TTI (Time to Interactive) <3.5 seconds
-- [ ] FID (First Input Delay) <100ms
-- [ ] No layout shifts during lazy loading
+- [x] LCP (Largest Contentful Paint) <2.5 seconds
+- [x] TTI (Time to Interactive) <3.5 seconds
+- [x] FID (First Input Delay) <100ms
+- [x] No layout shifts during lazy loading
 
 ## Tasks
 

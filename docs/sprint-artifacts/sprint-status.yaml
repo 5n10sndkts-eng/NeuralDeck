@@ -81,7 +81,7 @@ development_status:
   epic-6: in-progress
   6-1-codebase-rag-indexing-system: done
   6-2-conversation-persistence: done
-  6-3-performance-optimization-code-splitting: ready-for-dev
+  6-3-performance-optimization-code-splitting: done
   6-4-security-hardening: ready-for-dev
   6-5-list-virtualization: ready-for-dev
   6-6-websocket-reconnection-delta-updates: ready-for-dev
