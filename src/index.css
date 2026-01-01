@@ -524,117 +524,213 @@ body,
 
 /* === STANDARDIZED COMPONENT CLASSES === */
 
-/* Cyber Panel - Standard */
+/* Cyber Panel - Standard - Enhanced */
 .cyber-panel {
   background: var(--bg-glass);
   backdrop-filter: var(--backdrop-blur);
-  border: 1px solid rgba(0, 240, 255, 0.2);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-panel);
-  transition: all var(--transition-base);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  border-radius: 8px;
+  box-shadow: 
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    0 0 1px rgba(0, 240, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .cyber-panel:hover {
-  border-color: rgba(0, 240, 255, 0.4);
-  box-shadow: var(--glow-sm), var(--shadow-panel);
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 
+    0 0 5px rgba(0, 240, 255, 0.2),
+    0 4px 28px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
 }
 
-/* Cyber Panel - Elevated */
+/* Cyber Panel - Elevated - Enhanced */
 .cyber-panel-elevated {
   background: var(--bg-glass);
   backdrop-filter: var(--backdrop-blur);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  border-radius: var(--radius-md);
-  box-shadow: var(--glow-md), var(--shadow-elevated);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 8px;
+  box-shadow: 
+    0 0 10px rgba(0, 240, 255, 0.15),
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* Cyber Button - Base */
+/* Cyber Button - Base - Enhanced */
 .cyber-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-lg);
+  gap: 8px;
+  padding: 10px 18px;
   font-family: var(--font-display);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-radius: var(--radius-sm);
+  letter-spacing: 0.12em;
+  border-radius: 6px;
   border: 1px solid;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
 }
 
 .cyber-btn-primary {
-  background: rgba(0, 240, 255, 0.1);
-  border-color: rgba(0, 240, 255, 0.5);
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.4);
   color: var(--color-cyan);
+  box-shadow: 
+    0 0 1px rgba(0, 240, 255, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .cyber-btn-primary:hover {
   background: rgba(0, 240, 255, 0.2);
-  box-shadow: var(--glow-sm);
+  border-color: rgba(0, 240, 255, 0.7);
+  box-shadow: 
+    0 0 5px rgba(0, 240, 255, 0.5),
+    0 0 15px rgba(0, 240, 255, 0.25),
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+  transform: translateY(-1px);
 }
 
 .cyber-btn-danger {
-  background: rgba(255, 0, 60, 0.1);
-  border-color: rgba(255, 0, 60, 0.5);
+  background: rgba(255, 0, 60, 0.12);
+  border-color: rgba(255, 0, 60, 0.4);
   color: var(--color-red);
+  box-shadow: 
+    0 0 1px rgba(255, 0, 60, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .cyber-btn-danger:hover {
   background: rgba(255, 0, 60, 0.2);
-  box-shadow: 0 0 10px rgba(255, 0, 60, 0.4);
+  border-color: rgba(255, 0, 60, 0.7);
+  box-shadow: 
+    0 0 10px rgba(255, 0, 60, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  text-shadow: 0 0 10px rgba(255, 0, 60, 0.6);
+  transform: translateY(-1px);
 }
 
 .cyber-btn-ghost {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(10, 10, 20, 0.4);
+  border-color: rgba(255, 255, 255, 0.15);
   color: var(--color-text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .cyber-btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
 }
 
-/* Corner Decorators - Standardized */
+/* Corner Decorators - Standardized - Enhanced */
 .corner-decorator {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-color: var(--color-primary);
   pointer-events: none;
+  filter: drop-shadow(0 0 3px currentColor);
 }
 
-.corner-tl { top: -1px; left: -1px; border-top: 2px solid; border-left: 2px solid; }
-.corner-tr { top: -1px; right: -1px; border-top: 2px solid; border-right: 2px solid; }
-.corner-bl { bottom: -1px; left: -1px; border-bottom: 2px solid; border-left: 2px solid; }
-.corner-br { bottom: -1px; right: -1px; border-bottom: 2px solid; border-right: 2px solid; }
+.corner-tl { 
+  top: -1px; 
+  left: -1px; 
+  border-top: 2px solid; 
+  border-left: 2px solid; 
+}
 
-/* Text Glow Effects */
+.corner-tr { 
+  top: -1px; 
+  right: -1px; 
+  border-top: 2px solid; 
+  border-right: 2px solid; 
+}
+
+.corner-bl { 
+  bottom: -1px; 
+  left: -1px; 
+  border-bottom: 2px solid; 
+  border-left: 2px solid; 
+}
+
+.corner-br { 
+  bottom: -1px; 
+  right: -1px; 
+  border-bottom: 2px solid; 
+  border-right: 2px solid; 
+}
+
+/* Text Glow Effects - Enhanced */
 .text-glow-primary {
-  text-shadow: 0 0 10px var(--color-primary-glow);
+  text-shadow: 
+    0 0 10px var(--color-primary-glow),
+    0 0 20px rgba(0, 240, 255, 0.3);
 }
 
 .text-glow-sm {
-  text-shadow: 0 0 5px var(--color-primary-glow);
+  text-shadow: 
+    0 0 5px var(--color-primary-glow),
+    0 0 10px rgba(0, 240, 255, 0.2);
 }
 
-/* Status Indicators */
+.text-glow-lg {
+  text-shadow: 
+    0 0 15px var(--color-primary-glow),
+    0 0 30px rgba(0, 240, 255, 0.4),
+    0 0 50px rgba(0, 240, 255, 0.2);
+}
+
+/* Status Indicators - Enhanced */
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
-  box-shadow: var(--glow-sm);
+  box-shadow: 
+    0 0 8px var(--color-primary),
+    0 0 16px rgba(0, 240, 255, 0.3);
 }
 
-.status-dot-idle { background: #666; box-shadow: none; }
-.status-dot-active { background: var(--color-cyan); animation: pulse 2s infinite; }
-.status-dot-warning { background: #ffa500; box-shadow: 0 0 5px rgba(255, 165, 0, 0.5); }
-.status-dot-error { background: var(--color-red); box-shadow: 0 0 5px rgba(255, 0, 60, 0.5); }
+.status-dot-idle { 
+  background: #666; 
+  box-shadow: none; 
+}
+
+.status-dot-active { 
+  background: var(--color-cyan); 
+  animation: pulse 2s infinite;
+  box-shadow: 
+    0 0 10px var(--color-cyan),
+    0 0 20px rgba(0, 240, 255, 0.4);
+}
+
+.status-dot-warning { 
+  background: #ffa500; 
+  box-shadow: 
+    0 0 8px #ffa500,
+    0 0 16px rgba(255, 165, 0, 0.3);
+}
+
+.status-dot-error { 
+  background: var(--color-red); 
+  box-shadow: 
+    0 0 8px var(--color-red),
+    0 0 16px rgba(255, 0, 60, 0.3);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NEON RENAISSANCE - P0: PREMIUM GLOW EFFECTS LIBRARY
@@ -872,70 +968,78 @@ body,
    Authentic Cyberpunk 2077 Glass Morphism
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Premium Glass Panel - Main Style */
+/* Premium Glass Panel - Main Style - Enhanced Modern */
 .neon-panel {
   background: linear-gradient(135deg,
-    rgba(10, 10, 20, 0.85) 0%,
-    rgba(5, 5, 15, 0.95) 100%
+    rgba(10, 10, 20, 0.88) 0%,
+    rgba(5, 5, 15, 0.96) 100%
   );
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 240, 255, 0.2);
-  border-radius: 8px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  border-radius: 10px;
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 0 1px rgba(0, 240, 255, 0.6),
-    0 4px 24px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease-out;
+    0 0 1px rgba(0, 240, 255, 0.5),
+    0 4px 24px rgba(0, 0, 0, 0.4),
+    0 8px 40px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Top edge light leak */
+/* Top edge light leak - Enhanced */
 .neon-panel::before {
   content: "";
   position: absolute;
   top: 0;
-  left: 10%;
-  right: 10%;
-  height: 1px;
+  left: 5%;
+  right: 5%;
+  height: 2px;
   background: linear-gradient(90deg,
     transparent,
-    rgba(0, 240, 255, 0.4),
-    rgba(255, 255, 255, 0.2),
-    rgba(0, 240, 255, 0.4),
+    rgba(0, 240, 255, 0.3),
+    rgba(255, 255, 255, 0.25),
+    rgba(0, 240, 255, 0.5),
+    rgba(255, 255, 255, 0.25),
+    rgba(0, 240, 255, 0.3),
     transparent
   );
   pointer-events: none;
+  filter: blur(1px);
 }
 
 .neon-panel:hover {
-  border-color: rgba(0, 240, 255, 0.4);
+  border-color: rgba(0, 240, 255, 0.3);
   box-shadow:
     0 0 2px rgba(0, 240, 255, 0.8),
-    0 0 10px rgba(0, 240, 255, 0.3),
+    0 0 15px rgba(0, 240, 255, 0.2),
     0 8px 32px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 12px 48px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
 }
 
-/* Elevated Variant */
+/* Elevated Variant - Enhanced */
 .neon-panel-elevated {
   background: linear-gradient(135deg,
-    rgba(15, 15, 30, 0.9) 0%,
-    rgba(8, 8, 20, 0.95) 100%
+    rgba(15, 15, 30, 0.92) 0%,
+    rgba(8, 8, 20, 0.96) 100%
   );
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(0, 240, 255, 0.35);
-  border-radius: 8px;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 10px;
   position: relative;
   overflow: hidden;
   box-shadow:
     0 0 2px rgba(0, 240, 255, 0.7),
-    0 0 15px rgba(0, 240, 255, 0.2),
-    0 12px 40px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 0 20px rgba(0, 240, 255, 0.15),
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transform: translateZ(0);
 }
 
 /* Inset Variant */
@@ -1015,23 +1119,27 @@ body,
     0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-/* ─── NEON CARD - Minimal glass card for content ─── */
+/* ─── NEON CARD - Minimal glass card for content - Enhanced ─── */
 .neon-card {
-  background: rgba(8, 8, 15, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 240, 255, 0.15);
-  border-radius: 6px;
-  transition: all 0.25s ease;
+  background: rgba(8, 8, 15, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 240, 255, 0.12);
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .neon-card:hover,
 .neon-card-hover {
-  border-color: rgba(0, 240, 255, 0.35);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.28);
+  box-shadow: 
+    0 0 15px rgba(0, 240, 255, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
 }
 
-/* SVG Corner Brackets Container */
+/* SVG Corner Brackets Container - Enhanced */
 .neon-corners {
   position: relative;
 }
@@ -1042,39 +1150,39 @@ body,
 .neon-corners > .corner-br {
   content: "";
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   pointer-events: none;
 }
 
-/* Top-Left Corner */
+/* Top-Left Corner - Enhanced */
 .neon-corners::before {
   top: -1px;
   left: -1px;
-  border-top: 2px solid rgba(0, 240, 255, 0.7);
-  border-left: 2px solid rgba(0, 240, 255, 0.7);
-  filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.5));
+  border-top: 2px solid rgba(0, 240, 255, 0.8);
+  border-left: 2px solid rgba(0, 240, 255, 0.8);
+  filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.6));
 }
 
-/* Top-Right Corner */
+/* Top-Right Corner - Enhanced */
 .neon-corners::after {
   top: -1px;
   right: -1px;
-  border-top: 2px solid rgba(0, 240, 255, 0.7);
-  border-right: 2px solid rgba(0, 240, 255, 0.7);
-  filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.5));
+  border-top: 2px solid rgba(0, 240, 255, 0.8);
+  border-right: 2px solid rgba(0, 240, 255, 0.8);
+  filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.6));
 }
 
-/* Use with inner elements for bottom corners */
+/* Use with inner elements for bottom corners - Enhanced */
 .corner-bl-neon {
   position: absolute;
   bottom: -1px;
   left: -1px;
-  width: 16px;
-  height: 16px;
-  border-bottom: 2px solid rgba(0, 240, 255, 0.7);
-  border-left: 2px solid rgba(0, 240, 255, 0.7);
-  filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.5));
+  width: 18px;
+  height: 18px;
+  border-bottom: 2px solid rgba(0, 240, 255, 0.8);
+  border-left: 2px solid rgba(0, 240, 255, 0.8);
+  filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.6));
   pointer-events: none;
 }
 
@@ -1082,11 +1190,11 @@ body,
   position: absolute;
   bottom: -1px;
   right: -1px;
-  width: 16px;
-  height: 16px;
-  border-bottom: 2px solid rgba(0, 240, 255, 0.7);
-  border-right: 2px solid rgba(0, 240, 255, 0.7);
-  filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.5));
+  width: 18px;
+  height: 18px;
+  border-bottom: 2px solid rgba(0, 240, 255, 0.8);
+  border-right: 2px solid rgba(0, 240, 255, 0.8);
+  filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.6));
   pointer-events: none;
 }
 
@@ -1321,47 +1429,54 @@ body,
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NEON RENAISSANCE - P1: HUD HEADER COMPONENT
-   Bracketed Section Headers with Status
+   Bracketed Section Headers with Status - Enhanced Modern Design
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .hud-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 14px;
+  padding: 14px 18px;
   font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.18em;
   color: var(--color-cyan);
   background: linear-gradient(90deg,
     rgba(0, 240, 255, 0.08) 0%,
+    rgba(0, 240, 255, 0.03) 50%,
     transparent 100%
   );
   border-left: 3px solid var(--color-cyan);
   position: relative;
+  box-shadow: 
+    inset 0 0 20px rgba(0, 240, 255, 0.05),
+    0 1px 0 rgba(0, 0, 0, 0.3);
 }
 
 .hud-header::before {
   content: "┌";
   font-family: var(--font-mono);
-  color: rgba(0, 240, 255, 0.6);
-  font-size: 16px;
+  color: rgba(0, 240, 255, 0.7);
+  font-size: 18px;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
 
 .hud-header::after {
   content: "";
   flex: 1;
-  height: 1px;
+  height: 2px;
   background: linear-gradient(90deg,
-    rgba(0, 240, 255, 0.4),
+    rgba(0, 240, 255, 0.5),
+    rgba(0, 240, 255, 0.2) 50%,
     transparent
   );
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
 }
 
 .hud-header-title {
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.6), 0 0 24px rgba(0, 240, 255, 0.3);
 }
 
 /* Status Dot for Headers */
@@ -1439,7 +1554,7 @@ body,
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NEON RENAISSANCE - P1: PREMIUM BUTTONS
-   Cyber Buttons with Shine Effects
+   Cyber Buttons with Shine Effects - Enhanced Modern Design
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .neon-button {
@@ -1449,24 +1564,26 @@ body,
   gap: 8px;
   padding: 10px 20px;
   font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--color-cyan);
   background: linear-gradient(135deg,
-    rgba(0, 240, 255, 0.15) 0%,
-    rgba(0, 240, 255, 0.05) 100%
+    rgba(0, 240, 255, 0.12) 0%,
+    rgba(0, 240, 255, 0.04) 100%
   );
-  border: 1px solid rgba(0, 240, 255, 0.5);
-  border-radius: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 6px;
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: all 0.2s ease-out;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow:
-    0 0 1px rgba(0, 240, 255, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 0 1px rgba(0, 240, 255, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
 }
 
 /* Shine sweep effect */
@@ -1480,10 +1597,10 @@ body,
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.25),
     transparent
   );
-  transition: left 0.5s ease-out;
+  transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .neon-button:hover::before {
@@ -1492,107 +1609,144 @@ body,
 
 .neon-button:hover {
   background: linear-gradient(135deg,
-    rgba(0, 240, 255, 0.25) 0%,
-    rgba(0, 240, 255, 0.1) 100%
+    rgba(0, 240, 255, 0.22) 0%,
+    rgba(0, 240, 255, 0.08) 100%
   );
-  border-color: rgba(0, 240, 255, 0.8);
+  border-color: rgba(0, 240, 255, 0.7);
   box-shadow:
-    0 0 5px rgba(0, 240, 255, 0.5),
+    0 0 5px rgba(0, 240, 255, 0.6),
     0 0 15px rgba(0, 240, 255, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+  transform: translateY(-1px);
 }
 
 .neon-button:active {
-  transform: scale(0.98);
+  transform: translateY(0) scale(0.98);
   box-shadow:
     0 0 10px rgba(0, 240, 255, 0.6),
-    0 0 20px rgba(0, 240, 255, 0.4);
+    0 0 20px rgba(0, 240, 255, 0.4),
+    inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Size Variants */
 .neon-button-sm {
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 10px;
+  gap: 6px;
+  border-radius: 4px;
+}
+
+.neon-button-md {
+  padding: 10px 20px;
+  font-size: 11px;
+  gap: 8px;
+  border-radius: 6px;
 }
 
 .neon-button-lg {
-  padding: 14px 28px;
-  font-size: 14px;
+  padding: 12px 28px;
+  font-size: 12px;
+  gap: 10px;
+  border-radius: 8px;
 }
 
 /* Color Variants */
 .neon-button-purple {
   color: var(--color-purple);
   background: linear-gradient(135deg,
-    rgba(188, 19, 254, 0.15) 0%,
-    rgba(188, 19, 254, 0.05) 100%
+    rgba(188, 19, 254, 0.12) 0%,
+    rgba(188, 19, 254, 0.04) 100%
   );
-  border-color: rgba(188, 19, 254, 0.5);
+  border-color: rgba(188, 19, 254, 0.4);
+  box-shadow:
+    0 0 1px rgba(188, 19, 254, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .neon-button-purple:hover {
   background: linear-gradient(135deg,
-    rgba(188, 19, 254, 0.25) 0%,
-    rgba(188, 19, 254, 0.1) 100%
+    rgba(188, 19, 254, 0.22) 0%,
+    rgba(188, 19, 254, 0.08) 100%
   );
-  border-color: rgba(188, 19, 254, 0.8);
+  border-color: rgba(188, 19, 254, 0.7);
   box-shadow:
-    0 0 5px rgba(188, 19, 254, 0.5),
-    0 0 15px rgba(188, 19, 254, 0.3);
+    0 0 5px rgba(188, 19, 254, 0.6),
+    0 0 15px rgba(188, 19, 254, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  text-shadow: 0 0 10px rgba(188, 19, 254, 0.6);
 }
 
 .neon-button-red {
   color: var(--color-red);
   background: linear-gradient(135deg,
-    rgba(255, 0, 60, 0.15) 0%,
-    rgba(255, 0, 60, 0.05) 100%
+    rgba(255, 0, 60, 0.12) 0%,
+    rgba(255, 0, 60, 0.04) 100%
   );
-  border-color: rgba(255, 0, 60, 0.5);
+  border-color: rgba(255, 0, 60, 0.4);
+  box-shadow:
+    0 0 1px rgba(255, 0, 60, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .neon-button-red:hover {
   background: linear-gradient(135deg,
-    rgba(255, 0, 60, 0.25) 0%,
-    rgba(255, 0, 60, 0.1) 100%
+    rgba(255, 0, 60, 0.22) 0%,
+    rgba(255, 0, 60, 0.08) 100%
   );
-  border-color: rgba(255, 0, 60, 0.8);
+  border-color: rgba(255, 0, 60, 0.7);
   box-shadow:
-    0 0 5px rgba(255, 0, 60, 0.5),
-    0 0 15px rgba(255, 0, 60, 0.3);
+    0 0 5px rgba(255, 0, 60, 0.6),
+    0 0 15px rgba(255, 0, 60, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  text-shadow: 0 0 10px rgba(255, 0, 60, 0.6);
 }
 
 .neon-button-green {
   color: var(--color-green);
   background: linear-gradient(135deg,
-    rgba(10, 255, 10, 0.15) 0%,
-    rgba(10, 255, 10, 0.05) 100%
+    rgba(10, 255, 10, 0.12) 0%,
+    rgba(10, 255, 10, 0.04) 100%
   );
-  border-color: rgba(10, 255, 10, 0.5);
+  border-color: rgba(10, 255, 10, 0.4);
+  box-shadow:
+    0 0 1px rgba(10, 255, 10, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .neon-button-green:hover {
   background: linear-gradient(135deg,
-    rgba(10, 255, 10, 0.25) 0%,
-    rgba(10, 255, 10, 0.1) 100%
+    rgba(10, 255, 10, 0.22) 0%,
+    rgba(10, 255, 10, 0.08) 100%
   );
-  border-color: rgba(10, 255, 10, 0.8);
+  border-color: rgba(10, 255, 10, 0.7);
   box-shadow:
-    0 0 5px rgba(10, 255, 10, 0.5),
-    0 0 15px rgba(10, 255, 10, 0.3);
+    0 0 5px rgba(10, 255, 10, 0.6),
+    0 0 15px rgba(10, 255, 10, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  text-shadow: 0 0 10px rgba(10, 255, 10, 0.6);
 }
 
 /* Ghost Variant */
 .neon-button-ghost {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.8);
+  background: rgba(10, 10, 20, 0.4);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .neon-button-ghost:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.4);
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Disabled State */
@@ -1613,100 +1767,118 @@ body,
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NEON RENAISSANCE - P1: PREMIUM INPUTS
-   Cyber Inputs with Focus Glow
+   Cyber Inputs with Focus Glow - Enhanced Modern Design
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .neon-input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 11px 16px;
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--color-text);
-  background: rgba(5, 5, 12, 0.8);
+  background: rgba(5, 5, 12, 0.85);
   border: 1px solid rgba(0, 240, 255, 0.2);
-  border-radius: 4px;
+  border-radius: 6px;
   outline: none;
-  transition: all 0.2s ease-out;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .neon-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.25);
   font-style: italic;
 }
 
 .neon-input:hover {
-  border-color: rgba(0, 240, 255, 0.4);
+  border-color: rgba(0, 240, 255, 0.35);
+  background: rgba(5, 5, 12, 0.9);
 }
 
 .neon-input:focus {
-  border-color: rgba(0, 240, 255, 0.7);
+  border-color: rgba(0, 240, 255, 0.6);
+  background: rgba(5, 5, 12, 0.95);
   box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.3),
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
     0 0 5px rgba(0, 240, 255, 0.3),
-    0 0 15px rgba(0, 240, 255, 0.15);
+    0 0 15px rgba(0, 240, 255, 0.15),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
 }
 
-/* Textarea variant */
+/* Textarea variant - Enhanced */
 .neon-textarea {
   width: 100%;
   min-height: 100px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--color-text);
-  background: rgba(5, 5, 12, 0.8);
+  background: rgba(5, 5, 12, 0.85);
   border: 1px solid rgba(0, 240, 255, 0.2);
-  border-radius: 4px;
+  border-radius: 6px;
   outline: none;
   resize: vertical;
-  transition: all 0.2s ease-out;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .neon-textarea:focus {
-  border-color: rgba(0, 240, 255, 0.7);
+  border-color: rgba(0, 240, 255, 0.6);
+  background: rgba(5, 5, 12, 0.95);
   box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.3),
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
     0 0 5px rgba(0, 240, 255, 0.3),
-    0 0 15px rgba(0, 240, 255, 0.15);
+    0 0 15px rgba(0, 240, 255, 0.15),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
 }
 
-/* Select dropdown */
+/* Select dropdown - Enhanced */
 .neon-select {
   appearance: none;
   width: 100%;
-  padding: 10px 36px 10px 14px;
+  padding: 11px 40px 11px 16px;
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--color-cyan);
-  background: rgba(5, 5, 12, 0.8);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  border-radius: 4px;
+  background: rgba(5, 5, 12, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 6px;
   outline: none;
   cursor: pointer;
-  transition: all 0.2s ease-out;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2300f0ff' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
+  background-position: right 14px center;
+  box-shadow: 
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .neon-select:hover {
-  border-color: rgba(0, 240, 255, 0.5);
+  border-color: rgba(0, 240, 255, 0.4);
+  background-color: rgba(5, 5, 12, 0.9);
 }
 
 .neon-select:focus {
-  border-color: rgba(0, 240, 255, 0.7);
+  border-color: rgba(0, 240, 255, 0.6);
+  background-color: rgba(5, 5, 12, 0.95);
   box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
     0 0 5px rgba(0, 240, 255, 0.3),
     0 0 15px rgba(0, 240, 255, 0.15);
+  transform: translateY(-1px);
 }
 
 .neon-select option {
   background: rgba(10, 10, 20, 0.98);
   color: var(--color-text);
-  padding: 8px;
+  padding: 10px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
