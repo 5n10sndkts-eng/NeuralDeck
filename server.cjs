@@ -299,6 +299,133 @@ async function start() {
         }
     });
 
+    // File System: Check if file exists - Story 10 (R-007)
+    fastify.get('/api/files/check', async (request, reply) => {
+        try {
+            const { path: filePath } = request.query;
+            if (!filePath) {
+                return reply.code(400).send({ error: 'Missing path parameter' });
+            }
+            const cleanPath = safePath(filePath);
+            try {
+                await fs.access(cleanPath);
+                return { exists: true, path: cleanPath };
+            } catch {
+                return { exists: false, path: cleanPath };
+            }
+        } catch (e) {
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // File System: Create backup - Story 10 (R-007)
+    fastify.post('/api/files/backup', async (request, reply) => {
+        try {
+            const { path: filePath } = request.body;
+            if (!filePath) {
+                return reply.code(400).send({ error: 'Missing path parameter' });
+            }
+            const originalPath = safePath(filePath);
+            
+            // Check if original file exists
+            try {
+                await fs.access(originalPath);
+            } catch {
+                return reply.code(404).send({ error: 'Original file not found' });
+            }
+
+            // Create backup directory
+            const dir = path.dirname(originalPath);
+            const backupDir = path.join(dir, '.backup');
+            await fs.mkdir(backupDir, { recursive: true });
+
+            // Generate backup filename with timestamp
+            const ext = path.extname(originalPath);
+            const basename = path.basename(originalPath, ext);
+            const timestamp = Date.now();
+            const backupFilename = `${basename}_${timestamp}${ext}`;
+            const backupPath = path.join(backupDir, backupFilename);
+
+            // Copy file to backup
+            await fs.copyFile(originalPath, backupPath);
+            fastify.log.info(`[FILES] Backup created: ${backupPath}`);
+
+            return {
+                success: true,
+                backupPath,
+                originalPath,
+                timestamp
+            };
+        } catch (e) {
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
+    // File System: Save with versioning - Story 10 (R-007)
+    fastify.post('/api/files/save', async (request, reply) => {
+        try {
+            const { path: filePath, content, mode = 'versioned' } = request.body;
+            if (!filePath || content === undefined) {
+                return reply.code(400).send({ error: 'Missing path or content parameter' });
+            }
+
+            const cleanPath = safePath(filePath);
+            const dir = path.dirname(cleanPath);
+            
+            // Ensure directory exists
+            await fs.mkdir(dir, { recursive: true });
+
+            let finalPath = cleanPath;
+            let backupCreated = false;
+            let wasVersioned = false;
+
+            if (mode === 'versioned') {
+                // Create versioned filename with timestamp
+                const ext = path.extname(cleanPath);
+                const basename = path.basename(cleanPath, ext);
+                const timestamp = Date.now();
+                const versionedFilename = `${basename}_${timestamp}${ext}`;
+                finalPath = path.join(dir, versionedFilename);
+                wasVersioned = true;
+                fastify.log.info(`[FILES] Creating versioned file: ${finalPath}`);
+            } else if (mode === 'overwrite') {
+                // Check if file exists and create backup
+                try {
+                    await fs.access(cleanPath);
+                    // File exists - create backup first
+                    const backupDir = path.join(dir, '.backup');
+                    await fs.mkdir(backupDir, { recursive: true });
+                    
+                    const ext = path.extname(cleanPath);
+                    const basename = path.basename(cleanPath, ext);
+                    const timestamp = Date.now();
+                    const backupFilename = `${basename}_${timestamp}${ext}`;
+                    const backupPath = path.join(backupDir, backupFilename);
+                    
+                    await fs.copyFile(cleanPath, backupPath);
+                    backupCreated = true;
+                    fastify.log.info(`[FILES] Backup created before overwrite: ${backupPath}`);
+                } catch {
+                    // File doesn't exist - no backup needed
+                }
+            }
+
+            // Write the file
+            await fs.writeFile(finalPath, content, 'utf-8');
+            fastify.log.info(`[FILES] File saved: ${finalPath}`);
+
+            return {
+                success: true,
+                path: finalPath,
+                mode,
+                backupCreated,
+                wasVersioned
+            };
+        } catch (e) {
+            reply.code(500).send({ error: e.message });
+        }
+    });
+
     // CLI Provider whitelist for AI tools
     const CLI_PROVIDER_COMMANDS = {
         'cli': null, // User-defined, validated separately
