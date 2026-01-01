@@ -22,7 +22,7 @@ export const CyberButton: React.FC<CyberButtonProps> = ({
             fontFamily: 'var(--font-display)',
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
-            fontWeight: 600,
+            fontWeight: 700,
             transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'inline-flex',
             alignItems: 'center',
@@ -30,39 +30,45 @@ export const CyberButton: React.FC<CyberButtonProps> = ({
             gap: '0.5rem',
             cursor: 'pointer',
             backdropFilter: 'blur(8px)',
-            borderRadius: '4px',
+            borderRadius: '6px',
         };
 
         const sizes: Record<string, React.CSSProperties> = {
-            sm: { padding: '0.375rem 0.875rem', fontSize: '0.625rem' },
-            md: { padding: '0.5rem 1.25rem', fontSize: '0.7rem' },
-            lg: { padding: '0.625rem 1.75rem', fontSize: '0.75rem' }
+            sm: { padding: '0.375rem 0.875rem', fontSize: '0.625rem', borderRadius: '4px' },
+            md: { padding: '0.625rem 1.25rem', fontSize: '0.6875rem', borderRadius: '6px' },
+            lg: { padding: '0.75rem 1.75rem', fontSize: '0.75rem', borderRadius: '8px' }
         };
 
         const variants: Record<string, React.CSSProperties> = {
             primary: {
-                background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.15) 0%, rgba(0, 240, 255, 0.05) 100%)',
+                background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.12) 0%, rgba(0, 240, 255, 0.04) 100%)',
                 color: '#00f0ff',
                 border: '1px solid rgba(0, 240, 255, 0.4)',
-                boxShadow: glow ? '0 0 20px rgba(0, 240, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)' : 'none'
+                boxShadow: glow 
+                    ? '0 0 1px rgba(0, 240, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)' 
+                    : '0 2px 8px rgba(0, 0, 0, 0.2)'
             },
             secondary: {
-                background: 'linear-gradient(135deg, rgba(188, 19, 254, 0.15) 0%, rgba(188, 19, 254, 0.05) 100%)',
+                background: 'linear-gradient(135deg, rgba(188, 19, 254, 0.12) 0%, rgba(188, 19, 254, 0.04) 100%)',
                 color: '#bc13fe',
                 border: '1px solid rgba(188, 19, 254, 0.4)',
-                boxShadow: glow ? '0 0 20px rgba(188, 19, 254, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)' : 'none'
+                boxShadow: glow 
+                    ? '0 0 1px rgba(188, 19, 254, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)' 
+                    : '0 2px 8px rgba(0, 0, 0, 0.2)'
             },
             danger: {
-                background: 'linear-gradient(135deg, rgba(255, 0, 60, 0.15) 0%, rgba(255, 0, 60, 0.05) 100%)',
+                background: 'linear-gradient(135deg, rgba(255, 0, 60, 0.12) 0%, rgba(255, 0, 60, 0.04) 100%)',
                 color: '#ff003c',
                 border: '1px solid rgba(255, 0, 60, 0.4)',
-                boxShadow: glow ? '0 0 20px rgba(255, 0, 60, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)' : 'none'
+                boxShadow: glow 
+                    ? '0 0 1px rgba(255, 0, 60, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)' 
+                    : '0 2px 8px rgba(0, 0, 0, 0.2)'
             },
             ghost: {
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: 'none'
+                background: 'rgba(10, 10, 20, 0.4)',
+                color: 'rgba(255, 255, 255, 0.7)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
             }
         };
 
@@ -71,8 +77,8 @@ export const CyberButton: React.FC<CyberButtonProps> = ({
 
     return (
         <motion.button
-            whileHover={{ scale: 1.03, y: -1 }}
-            whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.02, y: -1 }}
+            whileTap={{ scale: 0.98 }}
             style={getVariantStyles()}
             className={`cyber-button ${className || ''}`}
             onClick={(e) => {
@@ -94,9 +100,9 @@ export const CyberButton: React.FC<CyberButtonProps> = ({
                     left: '-100%',
                     width: '100%',
                     height: '100%',
-                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
                     transform: 'skewX(-15deg)',
-                    transition: 'left 0.5s ease-in-out'
+                    transition: 'left 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             />
 
@@ -109,6 +115,8 @@ export const CyberButton: React.FC<CyberButtonProps> = ({
                 }
                 .cyber-button:hover {
                     border-color: currentColor !important;
+                    box-shadow: 0 0 5px currentColor, 0 0 15px rgba(0, 240, 255, 0.3), 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+                    text-shadow: 0 0 10px currentColor !important;
                 }
             `}</style>
         </motion.button>
@@ -131,19 +139,19 @@ export const CyberPanel: React.FC<CyberPanelProps> = ({
     const getVariantStyles = (): React.CSSProperties => {
         const variants: Record<string, React.CSSProperties> = {
             glass: {
-                background: 'linear-gradient(135deg, rgba(10, 10, 18, 0.85) 0%, rgba(5, 5, 12, 0.9) 100%)',
-                border: '1px solid rgba(0, 240, 255, 0.12)',
-                boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                background: 'linear-gradient(135deg, rgba(10, 10, 18, 0.88) 0%, rgba(5, 5, 12, 0.96) 100%)',
+                border: '1px solid rgba(0, 240, 255, 0.18)',
+                boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
             },
             solid: {
                 background: 'linear-gradient(135deg, rgba(12, 12, 22, 0.98) 0%, rgba(6, 6, 14, 0.99) 100%)',
                 border: '1px solid rgba(0, 240, 255, 0.25)',
-                boxShadow: '0 0 25px rgba(0, 240, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.08)'
+                boxShadow: '0 0 25px rgba(0, 240, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
             },
             elevated: {
-                background: 'linear-gradient(135deg, rgba(15, 15, 25, 0.95) 0%, rgba(8, 8, 16, 0.98) 100%)',
-                border: '1px solid rgba(0, 240, 255, 0.2)',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 240, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                background: 'linear-gradient(135deg, rgba(15, 15, 25, 0.92) 0%, rgba(8, 8, 16, 0.96) 100%)',
+                border: '1px solid rgba(0, 240, 255, 0.3)',
+                boxShadow: '0 0 2px rgba(0, 240, 255, 0.7), 0 0 20px rgba(0, 240, 255, 0.15), 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12)'
             }
         };
         return variants[variant];
