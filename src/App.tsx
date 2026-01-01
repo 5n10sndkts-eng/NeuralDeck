@@ -48,6 +48,7 @@ import { useVoice } from './hooks/useVoiceInput';
 import { parseVoiceCommand } from './services/voiceCommandParser';
 import { useNeuralAutonomy } from './hooks/useNeuralAutonomy';
 import { fetchFiles, sendChat, readFile, writeFile } from './services/api';
+import { authService } from './services/auth';
 import { GlobalAudio } from './services/audioEngine';
 import { SoundEffects } from './services/sound';
 import type { AmbientMood } from './services/ambientGenerator';
@@ -56,6 +57,20 @@ import { storageManager } from './services/storageManager';
 import { FileNode, ChatMessage, ConnectionProfile, ViewMode, AgentProfile } from './types';
 
 const AppContent: React.FC = () => {
+    // --- AUTH INITIALIZATION - Story 6-4 ---
+    useEffect(() => {
+        // Create anonymous session if not authenticated
+        if (!authService.isAuthenticated()) {
+            authService.createSession('anonymous').then((tokens) => {
+                if (tokens) {
+                    console.log('[AUTH] Anonymous session created');
+                } else {
+                    console.warn('[AUTH] Failed to create session');
+                }
+            });
+        }
+    }, []);
+
     // --- UI CONTEXT (Adaptive) ---
     const { mode, isAlert, toggleAlert, setActiveAgents: setUIImplActiveAgents } = useUI();
     const { phase, logs, activeAgents, isAutoMode, toggleAuto, currentThought } = useSocket(); // useSocket call moved to top
@@ -66,7 +81,8 @@ const AppContent: React.FC = () => {
         addMessage,
         currentSessionId,
         newSession,
-        isLoading: isLoadingConversation
+        isLoading: isLoadingConversation,
+        cleanupOldSessions
     } = useConversation();
 
     // Sync activeAgents from Socket to UI Context

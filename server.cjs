@@ -22,6 +22,14 @@ const helmet = safeRequire('@fastify/helmet');
 const cors = safeRequire('@fastify/cors');
 const rateLimit = safeRequire('@fastify/rate-limit');
 const compress = safeRequire('@fastify/compress');
+const cookie = safeRequire('@fastify/cookie');
+const csrf = safeRequire('@fastify/csrf-protection');
+const jwt = safeRequire('jsonwebtoken');
+const crypto = require('crypto');
+
+// --- SECURITY SERVICES - Story 6-4 ---
+const securityLogger = require('./server/lib/securityLogger.cjs');
+const encryption = require('./server/lib/encryption.cjs');
 
 // --- FILE WATCHER SERVICE - Story 1.3 ---
 const { initFileWatcher, getFileWatcher } = require('./server/services/fileWatcher.cjs');
@@ -31,6 +39,14 @@ const { broadcast } = require('./server/services/socket.cjs');
 
 const PORT = process.env.PORT || 3001;
 const WORKSPACE_PATH = process.cwd();
+
+// --- JWT CONFIGURATION - Story 6-4 ---
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const SESSION_EXPIRY = parseInt(process.env.SESSION_EXPIRY || '86400', 10); // 24 hours in seconds
+const REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days in seconds
+
+// In-memory session store (use Redis in production)
+const activeSessions = new Map();
 
 // --- COMMAND SECURITY - Story 1.2 ---
 
@@ -173,17 +189,36 @@ const generateTimestampedFilename = (originalPath) => {
 // --- BOOTSTRAP ---
 async function start() {
 
-    // 1. Security Headers (Helmet) - Story 1.1
+    // 1. Security Headers (Helmet) - Story 1.1 & 6-4
     if (helmet) {
+        const isDevelopment = process.env.NODE_ENV !== 'production';
+        
         await fastify.register(helmet, {
-            contentSecurityPolicy: false, // Disabled for Dev/Local flexibility
+            contentSecurityPolicy: {
+                directives: {
+                    defaultSrc: ["'self'"],
+                    scriptSrc: ["'self'", "'unsafe-inline'"], // Vite requires unsafe-inline in dev
+                    styleSrc: ["'self'", "'unsafe-inline'"], // Tailwind needs this
+                    connectSrc: ["'self'", "ws://localhost:*", "wss://localhost:*", "http://localhost:*"],
+                    imgSrc: ["'self'", "data:", "blob:"],
+                    fontSrc: ["'self'", "data:"],
+                    objectSrc: ["'none'"],
+                    mediaSrc: ["'self'"],
+                    frameSrc: ["'none'"],
+                },
+                reportOnly: isDevelopment, // Report-only in dev, enforce in production
+            },
             xContentTypeOptions: true,    // Prevents MIME type sniffing
             xFrameOptions: { action: 'deny' }, // Prevents clickjacking
             xXssProtection: true,         // Enables XSS filter
             referrerPolicy: { policy: 'no-referrer' }, // Privacy protection
-            hsts: true                    // HTTP Strict Transport Security
+            hsts: process.env.NODE_ENV === 'production' ? {
+                maxAge: 31536000,
+                includeSubDomains: true,
+                preload: true
+            } : false
         });
-        fastify.log.info('[SECURITY] Helmet security headers enabled');
+        fastify.log.info('[SECURITY] Helmet security headers enabled with CSP');
     }
 
     // 2. CORS - Story 1.1: Explicit origin whitelist
@@ -248,7 +283,28 @@ async function start() {
         fastify.log.info('[SECURITY] Rate limiting enabled: 100 req/min per IP');
     }
 
-    // 5. Security Event Logging Hook - Story 1.1
+    // 5. Cookie Support - Story 6-4
+    if (cookie) {
+        await fastify.register(cookie, {
+            secret: JWT_SECRET,
+            parseOptions: {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+            }
+        });
+        fastify.log.info('[SECURITY] Cookie support enabled');
+    }
+
+    // 6. CSRF Protection - Story 6-4
+    if (csrf && cookie) {
+        await fastify.register(csrf, {
+            cookieOpts: { signed: true }
+        });
+        fastify.log.info('[SECURITY] CSRF protection enabled');
+    }
+
+    // 7. Security Event Logging Hook - Story 1.1 & 6-4
     fastify.addHook('onResponse', (request, reply, done) => {
         if (reply.statusCode === 429) {
             fastify.log.warn(`[SECURITY] Rate limit violation: ${request.method} ${request.url} from ${request.ip}`);
@@ -257,6 +313,267 @@ async function start() {
             fastify.log.warn(`[SECURITY] Access forbidden: ${request.method} ${request.url} from ${request.ip}`);
         }
         done();
+    });
+
+    // --- JWT AUTHENTICATION MIDDLEWARE - Story 6-4 ---
+
+    // Verify JWT token
+    const verifyToken = async (request, reply) => {
+        try {
+            const authHeader = request.headers.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                await securityLogger.logAuthAttempt(null, request.ip, false, 'No token provided');
+                reply.code(401).send({ error: 'Authentication required' });
+                return;
+            }
+
+            const token = authHeader.substring(7);
+            const decoded = jwt.verify(token, JWT_SECRET);
+
+            // Check if session is still valid
+            const session = activeSessions.get(decoded.sessionId);
+            if (!session || session.invalidated) {
+                await securityLogger.logAuthAttempt(decoded.userId, request.ip, false, 'Session invalidated');
+                reply.code(401).send({ error: 'Session expired or invalidated' });
+                return;
+            }
+
+            // Attach user info to request
+            request.user = {
+                userId: decoded.userId,
+                sessionId: decoded.sessionId,
+            };
+        } catch (err) {
+            await securityLogger.logAuthAttempt(null, request.ip, false, err.message);
+            reply.code(401).send({ error: 'Invalid or expired token' });
+        }
+    };
+
+    // Optional authentication (doesn't fail if no token)
+    const optionalAuth = async (request, reply) => {
+        try {
+            const authHeader = request.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.substring(7);
+                const decoded = jwt.verify(token, JWT_SECRET);
+                const session = activeSessions.get(decoded.sessionId);
+                if (session && !session.invalidated) {
+                    request.user = {
+                        userId: decoded.userId,
+                        sessionId: decoded.sessionId,
+                    };
+                }
+            }
+        } catch (err) {
+            // Silent fail for optional auth
+        }
+    };
+
+    // --- AUTHENTICATION ROUTES - Story 6-4 ---
+
+    // Create session (login)
+    fastify.post('/api/auth/session', async (request, reply) => {
+        try {
+            const { userId } = request.body;
+            const sessionId = crypto.randomBytes(32).toString('hex');
+            const now = Date.now();
+
+            // Create session
+            const session = {
+                sessionId,
+                userId: userId || 'anonymous',
+                createdAt: now,
+                expiresAt: now + (SESSION_EXPIRY * 1000),
+                invalidated: false,
+                ip: request.ip,
+            };
+
+            activeSessions.set(sessionId, session);
+
+            // Generate JWT token
+            const token = jwt.sign(
+                { userId: session.userId, sessionId },
+                JWT_SECRET,
+                { expiresIn: SESSION_EXPIRY }
+            );
+
+            // Generate refresh token
+            const refreshToken = jwt.sign(
+                { userId: session.userId, sessionId, type: 'refresh' },
+                JWT_SECRET,
+                { expiresIn: REFRESH_TOKEN_EXPIRY }
+            );
+
+            await securityLogger.logSessionCreate(session.userId, sessionId, request.ip);
+            await securityLogger.logAuthAttempt(session.userId, request.ip, true);
+
+            return {
+                token,
+                refreshToken,
+                expiresIn: SESSION_EXPIRY,
+                userId: session.userId,
+            };
+        } catch (err) {
+            fastify.log.error(`[AUTH] Session creation error: ${err.message}`);
+            reply.code(500).send({ error: 'Failed to create session' });
+        }
+    });
+
+    // Refresh token
+    fastify.post('/api/auth/refresh', async (request, reply) => {
+        try {
+            const { refreshToken } = request.body;
+
+            if (!refreshToken) {
+                reply.code(400).send({ error: 'Refresh token required' });
+                return;
+            }
+
+            const decoded = jwt.verify(refreshToken, JWT_SECRET);
+
+            if (decoded.type !== 'refresh') {
+                reply.code(400).send({ error: 'Invalid refresh token' });
+                return;
+            }
+
+            const session = activeSessions.get(decoded.sessionId);
+            if (!session || session.invalidated) {
+                await securityLogger.logAuthAttempt(decoded.userId, request.ip, false, 'Session invalidated');
+                reply.code(401).send({ error: 'Session expired or invalidated' });
+                return;
+            }
+
+            // Update session expiry
+            const now = Date.now();
+            session.expiresAt = now + (SESSION_EXPIRY * 1000);
+
+            // Generate new token
+            const newToken = jwt.sign(
+                { userId: session.userId, sessionId: decoded.sessionId },
+                JWT_SECRET,
+                { expiresIn: SESSION_EXPIRY }
+            );
+
+            await securityLogger.logSessionRefresh(session.userId, decoded.sessionId, request.ip);
+
+            return {
+                token: newToken,
+                expiresIn: SESSION_EXPIRY,
+            };
+        } catch (err) {
+            await securityLogger.logAuthAttempt(null, request.ip, false, err.message);
+            reply.code(401).send({ error: 'Invalid or expired refresh token' });
+        }
+    });
+
+    // Logout (invalidate session)
+    fastify.post('/api/auth/logout', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const session = activeSessions.get(request.user.sessionId);
+            if (session) {
+                session.invalidated = true;
+                await securityLogger.logSessionInvalidate(request.user.userId, request.user.sessionId, 'User logout');
+            }
+
+            return { success: true };
+        } catch (err) {
+            fastify.log.error(`[AUTH] Logout error: ${err.message}`);
+            reply.code(500).send({ error: 'Failed to logout' });
+        }
+    });
+
+    // Get CSRF token
+    fastify.get('/api/auth/csrf-token', async (request, reply) => {
+        if (!csrf) {
+            reply.code(503).send({ error: 'CSRF protection not available' });
+            return;
+        }
+
+        const token = await reply.generateCsrf();
+        return { csrfToken: token };
+    });
+
+    // --- API KEY MANAGEMENT ROUTES - Story 6-4 ---
+
+    // List API key providers (without exposing actual keys)
+    fastify.get('/api/config/keys', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const providers = await encryption.listProviders();
+            await securityLogger.logApiKeyOperation('list', 'all', request.user.userId, request.ip);
+            return { providers };
+        } catch (err) {
+            fastify.log.error(`[API_KEYS] List error: ${err.message}`);
+            reply.code(500).send({ error: 'Failed to list API key providers' });
+        }
+    });
+
+    // Get API key for a provider
+    fastify.get('/api/config/keys/:provider', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const { provider } = request.params;
+            const apiKey = await encryption.getApiKey(provider);
+            
+            await securityLogger.logApiKeyOperation('read', provider, request.user.userId, request.ip);
+            
+            if (!apiKey) {
+                reply.code(404).send({ error: `No API key found for provider: ${provider}` });
+                return;
+            }
+
+            // Return masked key for verification
+            const maskedKey = apiKey.substring(0, 8) + '...' + apiKey.substring(apiKey.length - 4);
+            return { provider, exists: true, masked: maskedKey };
+        } catch (err) {
+            fastify.log.error(`[API_KEYS] Get error: ${err.message}`);
+            reply.code(500).send({ error: 'Failed to get API key' });
+        }
+    });
+
+    // Set/Update API key for a provider
+    fastify.post('/api/config/keys/:provider', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const { provider } = request.params;
+            const { apiKey } = request.body;
+
+            if (!apiKey) {
+                reply.code(400).send({ error: 'API key is required' });
+                return;
+            }
+
+            await encryption.updateApiKey(provider, apiKey);
+            await securityLogger.logApiKeyOperation('update', provider, request.user.userId, request.ip);
+
+            return { success: true, provider };
+        } catch (err) {
+            fastify.log.error(`[API_KEYS] Update error: ${err.message}`);
+            reply.code(500).send({ error: 'Failed to update API key' });
+        }
+    });
+
+    // Delete API key for a provider
+    fastify.delete('/api/config/keys/:provider', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const { provider } = request.params;
+            await encryption.deleteApiKey(provider);
+            await securityLogger.logApiKeyOperation('delete', provider, request.user.userId, request.ip);
+
+            return { success: true, provider };
+        } catch (err) {
+            fastify.log.error(`[API_KEYS] Delete error: ${err.message}`);
+            reply.code(500).send({ error: 'Failed to delete API key' });
+        }
+    });
+
+    // Get security audit logs (admin only)
+    fastify.get('/api/security/audit-logs', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const limit = parseInt(request.query.limit || '100', 10);
+            const logs = await securityLogger.getRecentLogs(limit);
+            return { logs, count: logs.length };
+        } catch (err) {
+            fastify.log.error(`[AUDIT] Log retrieval error: ${err.message}`);
+            reply.code(500).send({ error: 'Failed to retrieve audit logs' });
+        }
     });
 
     // --- ROUTES ---
@@ -282,27 +599,53 @@ async function start() {
     });
 
     // File System: Read
-    fastify.post('/api/read', async (request, reply) => {
+    fastify.post('/api/read', { preHandler: optionalAuth }, async (request, reply) => {
         try {
             const { filePath } = request.body;
             const cleanPath = safePath(filePath);
             const content = await fs.readFile(cleanPath, 'utf-8');
+            
+            await securityLogger.logFileRead(
+                filePath,
+                request.user?.userId || 'anonymous',
+                true
+            );
+            
             return { content };
         } catch (e) {
+            await securityLogger.logFileRead(
+                request.body.filePath,
+                request.user?.userId || 'anonymous',
+                false,
+                e
+            );
             reply.code(404).send({ error: `File not found or unreadable. ${e.message}` });
         }
     });
 
     // File System: Write
-    fastify.post('/api/write', async (request, reply) => {
+    fastify.post('/api/write', { preHandler: optionalAuth }, async (request, reply) => {
         try {
             const { filePath, content } = request.body;
             const cleanPath = safePath(filePath);
             await fs.mkdir(path.dirname(cleanPath), { recursive: true });
             await fs.writeFile(cleanPath, content, 'utf-8');
+            
+            await securityLogger.logFileWrite(
+                filePath,
+                request.user?.userId || 'anonymous',
+                true
+            );
+            
             fastify.log.info(`[FS] Wrote ${filePath}`);
             return { success: true };
         } catch (e) {
+            await securityLogger.logFileWrite(
+                request.body.filePath,
+                request.user?.userId || 'anonymous',
+                false,
+                e
+            );
             reply.code(500).send({ error: e.message });
         }
     });
@@ -2335,9 +2678,37 @@ ${contentB}
 
     fastify.log.info('[RAG] RAG API endpoints registered');
 
+    // --- SOCKET.IO INITIALIZATION - Story 4-1 & 6-4 ---
+    try {
+        const { initSocket } = require('./server/services/socket.cjs');
+        
+        // Socket.IO needs the HTTP server, which Fastify wraps
+        await fastify.ready();
+        const httpServer = fastify.server;
+        
+        // Initialize Socket.IO with JWT auth
+        initSocket(httpServer, {
+            jwtSecret: JWT_SECRET,
+            jwt,
+            activeSessions,
+            securityLogger,
+        });
+        
+        fastify.log.info('[SOCKET] Socket.IO initialized with JWT authentication');
+    } catch (err) {
+        fastify.log.error(`[SOCKET] Failed to initialize Socket.IO: ${err.message}`);
+        // Continue server startup even if Socket.IO fails
+    }
+
     try {
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`NEURAL DECK CORE ONLINE: http://localhost:${PORT}`);
+        
+        // Log JWT secret info (for development only)
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[AUTH] JWT_SECRET: ${JWT_SECRET.substring(0, 10)}...`);
+            console.log(`[AUTH] Session expiry: ${SESSION_EXPIRY}s (${SESSION_EXPIRY / 3600}h)`);
+        }
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
