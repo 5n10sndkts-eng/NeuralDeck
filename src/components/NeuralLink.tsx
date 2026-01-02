@@ -89,14 +89,22 @@ const FileTreeItem: React.FC<{
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
-          paddingTop: '0.25rem',
-          paddingBottom: '0.25rem',
+          paddingTop: '0.375rem',
+          paddingBottom: '0.375rem',
           paddingRight: '0.5rem',
           cursor: 'pointer',
-          borderRadius: '0 4px 4px 0',
-          background: isActive ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+          borderRadius: '0 6px 6px 0',
+          background: isActive ? 'linear-gradient(90deg, rgba(0, 240, 255, 0.12) 0%, rgba(0, 240, 255, 0.04) 100%)' : 'transparent',
+          border: isActive ? '1px solid rgba(0, 240, 255, 0.2)' : '1px solid transparent',
+          borderLeft: 'none',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
-        whileHover={{ x: 4, transition: { duration: 0.2 }, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
+        whileHover={{ 
+          x: 4, 
+          transition: { duration: 0.2 }, 
+          backgroundColor: isActive ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+          borderColor: 'rgba(0, 240, 255, 0.15)'
+        }}
       >
         {isActive && (
           <MotionDiv
@@ -106,9 +114,10 @@ const FileTreeItem: React.FC<{
               left: 0,
               top: 0,
               bottom: 0,
-              width: '2px',
-              background: 'var(--color-cyan)',
-              boxShadow: '0 0 8px #00f0ff'
+              width: '3px',
+              background: 'linear-gradient(180deg, transparent 0%, #00f0ff 20%, #00f0ff 80%, transparent 100%)',
+              boxShadow: '0 0 10px rgba(0, 240, 255, 0.6), 0 0 20px rgba(0, 240, 255, 0.3)',
+              borderRadius: '0 2px 2px 0'
             }}
           />
         )}
@@ -134,11 +143,12 @@ const FileTreeItem: React.FC<{
           textOverflow: 'ellipsis',
           flex: 1,
           color: isActive ? 'var(--color-cyan)' : '#9ca3af',
-          fontWeight: isActive ? 500 : 400,
-          textShadow: isActive ? 'var(--shadow-neon-cyan)' : 'none'
+          fontWeight: isActive ? 600 : 400,
+          textShadow: isActive ? '0 0 10px rgba(0, 240, 255, 0.5)' : 'none',
+          transition: 'all 0.2s ease'
         }}>
           {node.name}
-          {isModified && <span style={{ marginLeft: '0.25rem', color: '#eab308' }}>*</span>}
+          {isModified && <span style={{ marginLeft: '0.25rem', color: '#facc15', textShadow: '0 0 8px rgba(250, 204, 21, 0.5)' }}>●</span>}
         </span>
       </MotionDiv>
 

@@ -150,49 +150,92 @@ const TheEditor: React.FC<Props> = ({
       {/* Editor Surface */}
       <div className="flex-1 relative flex overflow-hidden">
 
-        {/* Line Numbers - Premium Gutter */}
-        <div className="w-14 text-right pr-3 pt-4 select-none font-mono text-[10px] z-10" style={{
-          background: 'linear-gradient(90deg, rgba(8, 8, 16, 0.8) 0%, rgba(5, 5, 12, 0.6) 100%)',
-          borderRight: '1px solid rgba(0, 240, 255, 0.1)',
-          color: '#4b5563'
-        }}>
-          {localContent.split('\n').map((_, i) => (
-            <div key={i} className="h-[20px] leading-[20px]" style={{
-              color: i + 1 === Math.floor(localContent.split('\n').length / 2) ? '#00f0ff' : undefined
-            }}>{i + 1}</div>
-          ))}
-        </div>
-
-        <div className="flex-1 relative">
-          {/* SCANNER OVERLAY */}
-          {isScanning && (
-            <div className="absolute inset-0 z-50 pointer-events-none">
-              {/* Laser Line */}
-              <div className="w-full h-[2px] bg-cyber-red shadow-[0_0_20px_rgba(255,0,60,0.8)] animate-[scan_2s_linear_infinite]" />
-              {/* Red tint */}
-              <div className="absolute inset-0 bg-cyber-red/5 mix-blend-overlay" />
-              {/* Grid */}
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,0,60,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(255,0,60,0.2)_1px,transparent_1px)] bg-[size:20px_20px]" />
+        {!activeFile ? (
+          /* Empty State - Premium Cyberpunk Style */
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 relative" style={{
+            background: 'radial-gradient(ellipse at center, rgba(0, 240, 255, 0.03) 0%, transparent 70%)'
+          }}>
+            <div className="absolute inset-0 opacity-10" style={{
+              backgroundImage: 'linear-gradient(rgba(0, 240, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 240, 255, 0.1) 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)'
+            }} />
+            
+            <div className="relative z-10 flex flex-col items-center gap-4">
+              <FileText size={48} style={{ 
+                color: 'rgba(0, 240, 255, 0.3)', 
+                filter: 'drop-shadow(0 0 20px rgba(0, 240, 255, 0.2))'
+              }} />
+              <div className="text-center">
+                <h3 className="font-display text-sm uppercase tracking-wider mb-2" style={{ 
+                  color: '#00f0ff', 
+                  textShadow: '0 0 10px rgba(0, 240, 255, 0.5)' 
+                }}>
+                  No File Open
+                </h3>
+                <p className="font-mono text-xs" style={{ color: '#6b7280' }}>
+                  Select a file from the explorer to begin editing
+                </p>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <div className="px-3 py-1.5 font-mono text-[9px] uppercase tracking-wider" style={{
+                  background: 'rgba(0, 240, 255, 0.05)',
+                  border: '1px solid rgba(0, 240, 255, 0.2)',
+                  borderRadius: '4px',
+                  color: '#00f0ff'
+                }}>
+                  ⌘K - Command Palette
+                </div>
+              </div>
             </div>
-          )}
+          </div>
+        ) : (
+          <>
+            {/* Line Numbers - Premium Gutter */}
+            <div className="w-14 text-right pr-3 pt-4 select-none font-mono text-[10px] z-10" style={{
+              background: 'linear-gradient(90deg, rgba(8, 8, 16, 0.8) 0%, rgba(5, 5, 12, 0.6) 100%)',
+              borderRight: '1px solid rgba(0, 240, 255, 0.1)',
+              color: '#4b5563'
+            }}>
+              {localContent.split('\n').map((_, i) => (
+                <div key={i} className="h-[20px] leading-[20px]" style={{
+                  color: i + 1 === Math.floor(localContent.split('\n').length / 2) ? '#00f0ff' : undefined
+                }}>{i + 1}</div>
+              ))}
+            </div>
 
-          {/* Syntax Highlight Layer (Back) */}
-          <pre
-            ref={preRef}
-            className="absolute inset-0 p-4 font-mono text-sm leading-[20px] whitespace-pre pointer-events-none overflow-hidden text-gray-300"
-            dangerouslySetInnerHTML={{ __html: highlight(localContent) }}
-          />
+            <div className="flex-1 relative">
+              {/* SCANNER OVERLAY */}
+              {isScanning && (
+                <div className="absolute inset-0 z-50 pointer-events-none">
+                  {/* Laser Line */}
+                  <div className="w-full h-[2px] bg-cyber-red shadow-[0_0_20px_rgba(255,0,60,0.8)] animate-[scan_2s_linear_infinite]" />
+                  {/* Red tint */}
+                  <div className="absolute inset-0 bg-cyber-red/5 mix-blend-overlay" />
+                  {/* Grid */}
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(255,0,60,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(255,0,60,0.2)_1px,transparent_1px)] bg-[size:20px_20px]" />
+                </div>
+              )}
 
-          {/* Input Layer (Front) */}
-          <textarea
-            ref={textareaRef}
-            value={localContent}
-            onChange={handleChange}
-            onScroll={handleScroll}
-            className="absolute inset-0 bg-transparent text-transparent caret-cyber-cyan p-4 font-mono text-sm leading-[20px] resize-none border-none focus:ring-0 outline-none whitespace-pre custom-scrollbar selection:bg-cyber-cyan/30 selection:text-transparent z-10"
-            spellCheck={false}
-          />
-        </div>
+              {/* Syntax Highlight Layer (Back) */}
+              <pre
+                ref={preRef}
+                className="absolute inset-0 p-4 font-mono text-sm leading-[20px] whitespace-pre pointer-events-none overflow-hidden text-gray-300"
+                dangerouslySetInnerHTML={{ __html: highlight(localContent) }}
+              />
+
+              {/* Input Layer (Front) */}
+              <textarea
+                ref={textareaRef}
+                value={localContent}
+                onChange={handleChange}
+                onScroll={handleScroll}
+                className="absolute inset-0 bg-transparent text-transparent caret-cyber-cyan p-4 font-mono text-sm leading-[20px] resize-none border-none focus:ring-0 outline-none whitespace-pre custom-scrollbar selection:bg-cyber-cyan/30 selection:text-transparent z-10"
+                spellCheck={false}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Footer Status - Premium HUD Bar */}
