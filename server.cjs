@@ -46,6 +46,9 @@ const reasoningService = require('./server/services/reasoningService.cjs');
 // --- HIVE MEMORY SERVICE - Story 7-3 ---
 const hiveMemory = require('./server/services/hiveMemory.cjs');
 
+// --- WORKSPACE SERVICE ---
+const { workspaceService, NEURALDECK_DIR } = require('./server/services/workspaceService.cjs');
+
 const PORT = process.env.PORT || 3001;
 const WORKSPACE_PATH = process.cwd();
 
@@ -178,12 +181,29 @@ const validateCommandPaths = (cmd, ip) => {
 };
 
 // --- UTILS ---
-const safePath = (inputPath) => {
+const safePath = (inputPath, workspaceId = null) => {
+    // If workspace ID is provided, resolve relative to that workspace
+    let basePath = WORKSPACE_PATH;
+    
+    if (workspaceId) {
+        const workspace = workspaceService.getWorkspaceById(workspaceId);
+        if (!workspace) {
+            throw new Error("Invalid workspace ID");
+        }
+        basePath = workspace.path;
+    }
+    
     // Prevent traversal
-    const resolved = path.resolve(WORKSPACE_PATH, inputPath.replace(/^\//, ''));
-    if (!resolved.startsWith(WORKSPACE_PATH)) {
+    const resolved = path.resolve(basePath, inputPath.replace(/^\//, ''));
+    if (!resolved.startsWith(basePath)) {
         throw new Error("Access Denied: Path traversal detected.");
     }
+    
+    // Double-check not accessing NeuralDeck source (critical security check)
+    if (resolved.startsWith(NEURALDECK_DIR) || resolved === NEURALDECK_DIR) {
+        throw new Error("Access Denied: Cannot access NeuralDeck application files.");
+    }
+    
     return resolved;
 };
 
@@ -600,12 +620,150 @@ async function start() {
     // File System: List
     fastify.get('/api/files', async (request, reply) => {
         try {
-            const files = await getFileStructure(WORKSPACE_PATH);
+            const { workspaceId } = request.query;
+            let workspacePath = WORKSPACE_PATH;
+            
+            // If workspaceId is provided, use that workspace
+            if (workspaceId) {
+                const workspace = workspaceService.getWorkspaceById(workspaceId);
+                if (!workspace) {
+                    return reply.code(404).send({ error: 'Workspace not found' });
+                }
+                workspacePath = workspace.path;
+            } else {
+                // Otherwise try to use active workspace
+                const activeWorkspace = await workspaceService.getActiveWorkspace();
+                if (activeWorkspace) {
+                    workspacePath = activeWorkspace.path;
+                }
+            }
+            
+            const files = await getFileStructure(workspacePath);
             return files;
         } catch (e) {
+            fastify.log.error(`[FILES] Error: ${e.message}`);
             reply.code(500).send([]);
         }
     });
+
+    // --- WORKSPACE MANAGEMENT ENDPOINTS ---
+
+    // Get all workspaces and active workspace
+    fastify.get('/api/workspaces', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const workspaces = await workspaceService.getRecentWorkspaces();
+            const active = await workspaceService.getActiveWorkspace();
+            return { workspaces, active };
+        } catch (err) {
+            fastify.log.error(`[WORKSPACE] Error getting workspaces: ${err.message}`);
+            reply.code(500).send({ error: err.message });
+        }
+    });
+
+    // Add new workspace
+    fastify.post('/api/workspaces', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { path: workspacePath, name } = request.body;
+            
+            if (!workspacePath) {
+                return reply.code(400).send({ error: 'Workspace path is required' });
+            }
+
+            const workspace = await workspaceService.addWorkspace(workspacePath, name);
+            
+            await securityLogger.logAiOperation(
+                'workspace-add',
+                request.user?.userId || 'anonymous',
+                request.ip,
+                { path: workspacePath }
+            );
+
+            return { workspace };
+        } catch (err) {
+            fastify.log.error(`[WORKSPACE] Error adding workspace: ${err.message}`);
+            reply.code(400).send({ error: err.message });
+        }
+    });
+
+    // Activate a workspace
+    fastify.post('/api/workspaces/:id/activate', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { id } = request.params;
+            const workspace = await workspaceService.setActiveWorkspace(id);
+            
+            await securityLogger.logAiOperation(
+                'workspace-activate',
+                request.user?.userId || 'anonymous',
+                request.ip,
+                { workspaceId: id }
+            );
+
+            return { workspace };
+        } catch (err) {
+            fastify.log.error(`[WORKSPACE] Error activating workspace: ${err.message}`);
+            reply.code(400).send({ error: err.message });
+        }
+    });
+
+    // Remove workspace from list
+    fastify.delete('/api/workspaces/:id', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { id } = request.params;
+            await workspaceService.removeWorkspace(id);
+            
+            await securityLogger.logAiOperation(
+                'workspace-remove',
+                request.user?.userId || 'anonymous',
+                request.ip,
+                { workspaceId: id }
+            );
+
+            return { success: true };
+        } catch (err) {
+            fastify.log.error(`[WORKSPACE] Error removing workspace: ${err.message}`);
+            reply.code(400).send({ error: err.message });
+        }
+    });
+
+    // Validate workspace path
+    fastify.post('/api/workspaces/validate', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { path: workspacePath } = request.body;
+            
+            if (!workspacePath) {
+                return reply.code(400).send({ error: 'Path is required' });
+            }
+
+            const result = await workspaceService.validateWorkspacePath(workspacePath);
+            return result;
+        } catch (err) {
+            fastify.log.error(`[WORKSPACE] Error validating path: ${err.message}`);
+            reply.code(500).send({ error: err.message });
+        }
+    });
+
+    // Browse directory for folder picker
+    fastify.get('/api/browse', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { path: dirPath } = request.query;
+            
+            if (!dirPath) {
+                // Return user's home directory by default
+                const os = require('os');
+                const homePath = os.homedir();
+                const result = await workspaceService.browseDirectory(homePath);
+                return { ...result, currentPath: homePath };
+            }
+
+            const result = await workspaceService.browseDirectory(dirPath);
+            return { ...result, currentPath: dirPath };
+        } catch (err) {
+            fastify.log.error(`[WORKSPACE] Error browsing directory: ${err.message}`);
+            reply.code(400).send({ error: err.message });
+        }
+    });
+
+    // --- END WORKSPACE MANAGEMENT ENDPOINTS ---
 
     // --- REASONING SERVICE - Story 7-1 ---
     fastify.post('/api/think', { preHandler: optionalAuth }, async (request, reply) => {
@@ -639,8 +797,8 @@ async function start() {
     // File System: Read
     fastify.post('/api/read', { preHandler: optionalAuth }, async (request, reply) => {
         try {
-            const { filePath } = request.body;
-            const cleanPath = safePath(filePath);
+            const { filePath, workspaceId } = request.body;
+            const cleanPath = safePath(filePath, workspaceId);
             const content = await fs.readFile(cleanPath, 'utf-8');
 
             await securityLogger.logFileRead(
@@ -664,14 +822,23 @@ async function start() {
     // File System: Write (with automatic checkpointing - Story 6-8)
     fastify.post('/api/write', { preHandler: optionalAuth }, async (request, reply) => {
         try {
-            const { filePath, content, agentId, skipCheckpoint } = request.body;
-            const cleanPath = safePath(filePath);
+            const { filePath, content, agentId, skipCheckpoint, workspaceId } = request.body;
+            const cleanPath = safePath(filePath, workspaceId);
+            
+            // Determine workspace path for checkpoint service
+            let workspacePath = WORKSPACE_PATH;
+            if (workspaceId) {
+                const workspace = workspaceService.getWorkspaceById(workspaceId);
+                if (workspace) {
+                    workspacePath = workspace.path;
+                }
+            }
 
             // Story 6-8: Create checkpoint before modification (if file exists)
             if (!skipCheckpoint) {
                 try {
                     const oldContent = await fs.readFile(cleanPath, 'utf-8');
-                    const checkpointService = getCheckpointService(WORKSPACE_PATH);
+                    const checkpointService = getCheckpointService(workspacePath);
                     await checkpointService.createCheckpoint(
                         cleanPath,
                         oldContent,
@@ -707,6 +874,132 @@ async function start() {
             reply.code(500).send({ error: e.message });
         }
     });
+
+    // --- FILE CRUD OPERATIONS (Workspace-aware) ---
+
+    // Create a new file or directory
+    fastify.post('/api/files/create', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { path: itemPath, type, workspaceId } = request.body;
+            
+            if (!itemPath) {
+                return reply.code(400).send({ error: 'Path is required' });
+            }
+            
+            if (!type || !['file', 'directory'].includes(type)) {
+                return reply.code(400).send({ error: 'Type must be "file" or "directory"' });
+            }
+
+            const cleanPath = safePath(itemPath, workspaceId);
+
+            // Check if already exists
+            try {
+                await fs.access(cleanPath);
+                return reply.code(400).send({ error: 'Path already exists' });
+            } catch {
+                // Path doesn't exist, good to create
+            }
+
+            if (type === 'directory') {
+                await fs.mkdir(cleanPath, { recursive: true });
+            } else {
+                await fs.mkdir(path.dirname(cleanPath), { recursive: true });
+                await fs.writeFile(cleanPath, '', 'utf-8');
+            }
+
+            await securityLogger.logAiOperation(
+                `file-create-${type}`,
+                request.user?.userId || 'anonymous',
+                request.ip,
+                { path: itemPath }
+            );
+
+            return { success: true, path: itemPath, type };
+        } catch (err) {
+            fastify.log.error(`[FILE_CRUD] Create error: ${err.message}`);
+            reply.code(500).send({ error: err.message });
+        }
+    });
+
+    // Rename/move a file or directory
+    fastify.post('/api/files/rename', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { oldPath, newPath, workspaceId } = request.body;
+            
+            if (!oldPath || !newPath) {
+                return reply.code(400).send({ error: 'Both oldPath and newPath are required' });
+            }
+
+            const cleanOldPath = safePath(oldPath, workspaceId);
+            const cleanNewPath = safePath(newPath, workspaceId);
+
+            // Check if source exists
+            await fs.access(cleanOldPath);
+
+            // Check if destination already exists
+            try {
+                await fs.access(cleanNewPath);
+                return reply.code(400).send({ error: 'Destination path already exists' });
+            } catch {
+                // Destination doesn't exist, good to rename
+            }
+
+            // Ensure destination directory exists
+            await fs.mkdir(path.dirname(cleanNewPath), { recursive: true });
+
+            // Perform rename
+            await fs.rename(cleanOldPath, cleanNewPath);
+
+            await securityLogger.logAiOperation(
+                'file-rename',
+                request.user?.userId || 'anonymous',
+                request.ip,
+                { oldPath, newPath }
+            );
+
+            return { success: true, oldPath, newPath };
+        } catch (err) {
+            fastify.log.error(`[FILE_CRUD] Rename error: ${err.message}`);
+            reply.code(500).send({ error: err.message });
+        }
+    });
+
+    // Delete a file or directory
+    fastify.delete('/api/files', { preHandler: optionalAuth }, async (request, reply) => {
+        try {
+            const { path: itemPath, workspaceId } = request.body;
+            
+            if (!itemPath) {
+                return reply.code(400).send({ error: 'Path is required' });
+            }
+
+            const cleanPath = safePath(itemPath, workspaceId);
+
+            // Check if exists
+            const stats = await fs.stat(cleanPath);
+
+            // Delete file or directory
+            if (stats.isDirectory()) {
+                await fs.rm(cleanPath, { recursive: true, force: true });
+            } else {
+                await fs.unlink(cleanPath);
+            }
+
+            await securityLogger.logAiOperation(
+                'file-delete',
+                request.user?.userId || 'anonymous',
+                request.ip,
+                { path: itemPath }
+            );
+
+            return { success: true, path: itemPath };
+        } catch (err) {
+            fastify.log.error(`[FILE_CRUD] Delete error: ${err.message}`);
+            reply.code(500).send({ error: err.message });
+        }
+    });
+
+    // --- END FILE CRUD OPERATIONS ---
 
     // File System: Check if file exists - Story 10 (R-007)
     fastify.get('/api/files/check', async (request, reply) => {
