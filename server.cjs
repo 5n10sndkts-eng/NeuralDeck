@@ -671,12 +671,11 @@ async function start() {
 
             const workspace = await workspaceService.addWorkspace(workspacePath, name);
             
-            await securityLogger.logAiOperation(
-                'workspace-add',
-                request.user?.userId || 'anonymous',
-                request.ip,
-                { path: workspacePath }
-            );
+            await securityLogger.logSecurityEvent('workspace-add', {
+                userId: request.user?.userId || 'anonymous',
+                ip: request.ip,
+                path: workspacePath
+            });
 
             return { workspace };
         } catch (err) {
@@ -691,12 +690,11 @@ async function start() {
             const { id } = request.params;
             const workspace = await workspaceService.setActiveWorkspace(id);
             
-            await securityLogger.logAiOperation(
-                'workspace-activate',
-                request.user?.userId || 'anonymous',
-                request.ip,
-                { workspaceId: id }
-            );
+            await securityLogger.logSecurityEvent('workspace-activate', {
+                userId: request.user?.userId || 'anonymous',
+                ip: request.ip,
+                workspaceId: id
+            });
 
             return { workspace };
         } catch (err) {
@@ -711,12 +709,11 @@ async function start() {
             const { id } = request.params;
             await workspaceService.removeWorkspace(id);
             
-            await securityLogger.logAiOperation(
-                'workspace-remove',
-                request.user?.userId || 'anonymous',
-                request.ip,
-                { workspaceId: id }
-            );
+            await securityLogger.logSecurityEvent('workspace-remove', {
+                userId: request.user?.userId || 'anonymous',
+                ip: request.ip,
+                workspaceId: id
+            });
 
             return { success: true };
         } catch (err) {
@@ -907,12 +904,11 @@ async function start() {
                 await fs.writeFile(cleanPath, '', 'utf-8');
             }
 
-            await securityLogger.logAiOperation(
-                `file-create-${type}`,
-                request.user?.userId || 'anonymous',
-                request.ip,
-                { path: itemPath }
-            );
+            await securityLogger.logSecurityEvent(`file-create-${type}`, {
+                userId: request.user?.userId || 'anonymous',
+                ip: request.ip,
+                path: itemPath
+            });
 
             return { success: true, path: itemPath, type };
         } catch (err) {
@@ -950,12 +946,12 @@ async function start() {
             // Perform rename
             await fs.rename(cleanOldPath, cleanNewPath);
 
-            await securityLogger.logAiOperation(
-                'file-rename',
-                request.user?.userId || 'anonymous',
-                request.ip,
-                { oldPath, newPath }
-            );
+            await securityLogger.logSecurityEvent('file-rename', {
+                userId: request.user?.userId || 'anonymous',
+                ip: request.ip,
+                oldPath,
+                newPath
+            });
 
             return { success: true, oldPath, newPath };
         } catch (err) {
@@ -985,12 +981,11 @@ async function start() {
                 await fs.unlink(cleanPath);
             }
 
-            await securityLogger.logAiOperation(
-                'file-delete',
-                request.user?.userId || 'anonymous',
-                request.ip,
-                { path: itemPath }
-            );
+            await securityLogger.logSecurityEvent('file-delete', {
+                userId: request.user?.userId || 'anonymous',
+                ip: request.ip,
+                path: itemPath
+            });
 
             return { success: true, path: itemPath };
         } catch (err) {
