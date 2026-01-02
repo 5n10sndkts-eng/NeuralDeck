@@ -58,24 +58,25 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ sidebar, header, childre
 
             {/* TOP HUD BAR - Premium Neon Renaissance */}
             <div className="hud-header relative z-50" style={{
-                height: '4rem',
-                background: 'linear-gradient(180deg, rgba(10, 10, 20, 0.98) 0%, rgba(5, 5, 15, 0.95) 100%)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
+                height: '4.5rem',
+                background: 'linear-gradient(180deg, rgba(10, 10, 22, 0.98) 0%, rgba(5, 5, 15, 0.96) 100%)',
+                backdropFilter: 'blur(28px)',
+                WebkitBackdropFilter: 'blur(28px)',
                 borderBottom: '1px solid rgba(0, 240, 255, 0.25)',
-                boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 1px 0 rgba(0, 240, 255, 0.15), 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                boxShadow: '0 0 1px rgba(0, 240, 255, 0.6), 0 2px 0 rgba(0, 240, 255, 0.12), 0 8px 32px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
             }}>
                 {/* HUD Line Accent - More Glowy */}
                 <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{
-                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.6) 20%, rgba(0, 240, 255, 0.8) 50%, rgba(0, 240, 255, 0.6) 80%, transparent 100%)',
-                    boxShadow: '0 0 10px rgba(0, 240, 255, 0.4), 0 0 20px rgba(0, 240, 255, 0.2)'
+                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.5) 15%, rgba(0, 240, 255, 0.8) 50%, rgba(0, 240, 255, 0.5) 85%, transparent 100%)',
+                    boxShadow: '0 0 12px rgba(0, 240, 255, 0.5), 0 0 24px rgba(0, 240, 255, 0.25)',
+                    filter: 'blur(0.5px)'
                 }} />
-                <div className="h-full flex items-center justify-between px-5">
+                <div className="h-full flex items-center justify-between px-6">
                     {header}
                 </div>
             </div>
 
-            <div className="flex overflow-hidden relative z-40" style={{ height: 'calc(100vh - 4rem)' }}>
+            <div className="flex overflow-hidden relative z-40" style={{ height: 'calc(100vh - 4.5rem)' }}>
                 {/* LEFT DOCK SLOT */}
                 {sidebar}
 

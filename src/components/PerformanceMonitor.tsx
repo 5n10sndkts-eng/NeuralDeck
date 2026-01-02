@@ -63,27 +63,34 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
 
   return (
     <div 
-      className="fixed top-16 right-4 z-50 p-3 font-mono text-xs"
+      className="fixed top-16 right-4 z-50 p-3 font-mono text-xs transition-all duration-300"
       style={{
-        background: 'linear-gradient(135deg, rgba(10, 10, 20, 0.95) 0%, rgba(5, 5, 15, 0.98) 100%)',
-        border: '1px solid rgba(0, 240, 255, 0.3)',
-        borderRadius: '4px',
-        backdropFilter: 'blur(8px)',
-        boxShadow: '0 0 20px rgba(0, 240, 255, 0.2)'
+        background: 'linear-gradient(135deg, rgba(10, 10, 20, 0.92) 0%, rgba(5, 5, 15, 0.96) 100%)',
+        border: `1px solid ${fps < 30 ? 'rgba(255, 0, 102, 0.4)' : 'rgba(0, 240, 255, 0.2)'}`,
+        borderRadius: '6px',
+        backdropFilter: 'blur(16px)',
+        boxShadow: fps < 30 
+          ? '0 0 20px rgba(255, 0, 102, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4)' 
+          : '0 0 15px rgba(0, 240, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.3)',
+        minWidth: '140px'
       }}
     >
-      <div className="flex items-center gap-2 mb-2" style={{ color: '#00f0ff' }}>
-        <Activity size={12} />
-        <span style={{ fontWeight: 700, letterSpacing: '0.1em' }}>PERFORMANCE</span>
+      <div className="flex items-center gap-2 mb-2.5" style={{ 
+        color: fps < 30 ? '#ff6690' : '#00f0ff',
+        transition: 'color 0.3s ease'
+      }}>
+        <Activity size={12} className={fps < 30 ? 'animate-pulse' : ''} />
+        <span style={{ fontWeight: 700, letterSpacing: '0.12em', fontSize: '9px' }}>PERFORMANCE</span>
       </div>
       
-      <div className="space-y-1" style={{ fontSize: '10px' }}>
+      <div className="space-y-1.5" style={{ fontSize: '10px' }}>
         <div className="flex justify-between gap-4">
           <span style={{ color: '#6b7280' }}>FPS:</span>
           <span style={{ 
             color: fpsColor, 
             fontWeight: 700,
-            textShadow: `0 0 8px ${fpsColor}40`
+            textShadow: `0 0 8px ${fpsColor}60`,
+            transition: 'all 0.3s ease'
           }}>
             {fps}
           </span>
@@ -91,25 +98,30 @@ export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
         
         <div className="flex justify-between gap-4">
           <span style={{ color: '#6b7280' }}>Messages:</span>
-          <span style={{ color: '#bc13fe' }}>{messageCount}</span>
+          <span style={{ color: '#a855f7', fontWeight: 600 }}>{messageCount}</span>
         </div>
         
         <div className="flex justify-between gap-4">
           <span style={{ color: '#6b7280' }}>Render:</span>
-          <span style={{ color: '#ffd000' }}>{renderTime}ms</span>
+          <span style={{ 
+            color: renderTime > 16 ? '#fbbf24' : '#4ade80',
+            fontWeight: 600
+          }}>{renderTime}ms</span>
         </div>
       </div>
 
-      {/* Warning indicator */}
+      {/* Subtle warning indicator */}
       {fps < 30 && (
         <div 
-          className="mt-2 pt-2 text-[9px] animate-pulse"
+          className="mt-2.5 pt-2 text-[9px] flex items-center gap-1.5"
           style={{ 
-            borderTop: '1px solid rgba(255, 0, 102, 0.3)',
-            color: '#ff0066'
+            borderTop: '1px solid rgba(255, 0, 102, 0.25)',
+            color: '#ff6690',
+            animation: 'pulse 2s ease-in-out infinite'
           }}
         >
-          ⚠ LOW FPS DETECTED
+          <span style={{ fontSize: '10px' }}>⚠</span>
+          <span style={{ letterSpacing: '0.05em' }}>Low FPS</span>
         </div>
       )}
     </div>

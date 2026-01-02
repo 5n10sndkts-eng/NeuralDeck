@@ -175,9 +175,9 @@ const TheCouncil: React.FC<Props> = ({
                 <div style={{ height: '2rem', width: '1px', background: 'rgba(255,255,255,0.1)', margin: '0 0.5rem' }} />
 
                 <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    {onToggleAutoRun && <ControlButton onClick={onToggleAutoRun} active={autoRun} activeColor="#4ade80" inactiveColor="#4b5563" icon={Rocket} title="Auto-Run Mode" glow />}
-                    <ControlButton onClick={onToggleMute} active={!isMuted} activeColor="#4ade80" inactiveColor="#4b5563" icon={isMuted ? VolumeX : Volume2} title="Audio" />
-                    <ControlButton onClick={onToggleSupervision} active={isSupervised && godMode} disabled={!godMode} activeColor="#60a5fa" inactiveColor="#4b5563" icon={isSupervised ? Eye : EyeOff} title="Supervision" glow />
+                    {onToggleAutoRun && <ControlButton onClick={onToggleAutoRun} active={autoRun} activeColor="#10b981" inactiveColor="#4b5563" icon={Rocket} title="Auto-Run Mode" glow />}
+                    <ControlButton onClick={onToggleMute} active={!isMuted} activeColor="#10b981" inactiveColor="#4b5563" icon={isMuted ? VolumeX : Volume2} title="Audio" />
+                    <ControlButton onClick={onToggleSupervision} active={isSupervised && godMode} disabled={!godMode} activeColor="#3b82f6" inactiveColor="#4b5563" icon={isSupervised ? Eye : EyeOff} title="Supervision" glow />
                     <ControlButton onClick={onToggleGodMode} active={godMode} activeColor="#ef4444" inactiveColor="#4b5563" icon={godMode ? ShieldAlert : ShieldCheck} title="GOD MODE" glow pulse className={godMode ? "god-mode-active" : ""} />
                 </div>
             </div>
@@ -220,25 +220,25 @@ const ControlButton = ({ onClick, active, disabled, activeColor, inactiveColor, 
         onMouseEnter={() => SoundEffects.hover()}
         disabled={disabled}
         style={{
-            width: '2.25rem',
-            height: '2.25rem',
+            width: '2.35rem',
+            height: '2.35rem',
             borderRadius: '6px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            transition: 'all 0.25s ease',
-            background: active ? `${activeColor}15` : 'rgba(255, 255, 255, 0.02)',
-            border: active ? `1px solid ${activeColor}50` : '1px solid rgba(255, 255, 255, 0.08)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            background: active ? `${activeColor}18` : 'rgba(255, 255, 255, 0.03)',
+            border: active ? `1px solid ${activeColor}60` : '1px solid rgba(255, 255, 255, 0.1)',
             color: active ? activeColor : inactiveColor,
-            opacity: disabled ? 0.2 : 1,
+            opacity: disabled ? 0.3 : 1,
             cursor: disabled ? 'not-allowed' : 'pointer',
-            boxShadow: active && glow ? `0 0 15px ${activeColor}40` : 'none',
-            animation: pulse && active ? 'pulse 2s infinite' : 'none'
+            boxShadow: active && glow ? `0 0 18px ${activeColor}35, inset 0 0 12px ${activeColor}15` : 'none',
+            animation: pulse && active ? 'pulse 2.5s ease-in-out infinite' : 'none'
         }}
         className={`control-btn ${className}`}
         title={title}
     >
-        <Icon size={14} style={{ filter: active && glow ? `drop-shadow(0 0 4px ${activeColor})` : 'none' }} />
+        <Icon size={14} style={{ filter: active && glow ? `drop-shadow(0 0 6px ${activeColor})` : 'none' }} />
     </button>
 );
 

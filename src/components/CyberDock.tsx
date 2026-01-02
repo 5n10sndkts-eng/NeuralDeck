@@ -21,8 +21,8 @@ export const CyberDock: React.FC<CyberDockProps> = ({ activeView, onViewChange, 
 
         return (
             <motion.button
-                whileHover={{ scale: 1.08, x: 4 }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.1, x: 6 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={() => {
                     onViewChange(mode);
                     playSound('click');
@@ -30,28 +30,28 @@ export const CyberDock: React.FC<CyberDockProps> = ({ activeView, onViewChange, 
                 onMouseEnter={() => playSound('hover')}
                 className="dock-item group relative"
                 style={{
-                    width: '3rem',
-                    height: '3rem',
+                    width: '3.25rem',
+                    height: '3.25rem',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '0.5rem',
-                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                    color: isActive ? '#00f0ff' : 'rgba(255, 255, 255, 0.4)',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    color: isActive ? '#00f0ff' : 'rgba(255, 255, 255, 0.35)',
                     background: isActive
-                        ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.15) 0%, rgba(0, 240, 255, 0.05) 100%)'
+                        ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.18) 0%, rgba(0, 240, 255, 0.06) 100%)'
                         : 'transparent',
                     boxShadow: isActive
-                        ? '0 0 20px rgba(0, 240, 255, 0.3), inset 0 0 15px rgba(0, 240, 255, 0.1)'
+                        ? '0 0 24px rgba(0, 240, 255, 0.25), inset 0 0 20px rgba(0, 240, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.3)'
                         : 'none',
                     border: isActive
-                        ? '1px solid rgba(0, 240, 255, 0.4)'
+                        ? '1px solid rgba(0, 240, 255, 0.5)'
                         : '1px solid transparent',
                     cursor: 'pointer'
                 }}
                 aria-label={label}
             >
-                <Icon size={20} strokeWidth={1.5} />
+                <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
 
                 {/* Active Indicator - Glowing Bar */}
                 {isActive && (
@@ -60,11 +60,11 @@ export const CyberDock: React.FC<CyberDockProps> = ({ activeView, onViewChange, 
                         className="absolute"
                         style={{
                             left: '-2px',
-                            width: '3px',
-                            height: '70%',
-                            background: 'linear-gradient(180deg, transparent 0%, #00f0ff 20%, #00f0ff 80%, transparent 100%)',
-                            borderRadius: '2px',
-                            boxShadow: '0 0 10px #00f0ff, 0 0 20px rgba(0, 240, 255, 0.5)'
+                            width: '4px',
+                            height: '75%',
+                            background: 'linear-gradient(180deg, transparent 0%, #00f0ff 15%, #00f0ff 85%, transparent 100%)',
+                            borderRadius: '0 2px 2px 0',
+                            boxShadow: '0 0 12px rgba(0, 240, 255, 0.7), 0 0 24px rgba(0, 240, 255, 0.4)'
                         }}
                     />
                 )}
@@ -113,13 +113,14 @@ export const CyberDock: React.FC<CyberDockProps> = ({ activeView, onViewChange, 
                 <style>{`
                     .dock-item:hover {
                         color: white !important;
-                        background: linear-gradient(135deg, rgba(0, 240, 255, 0.1) 0%, rgba(0, 240, 255, 0.03) 100%) !important;
-                        border-color: rgba(0, 240, 255, 0.2) !important;
+                        background: linear-gradient(135deg, rgba(0, 240, 255, 0.15) 0%, rgba(0, 240, 255, 0.05) 100%) !important;
+                        border-color: rgba(0, 240, 255, 0.3) !important;
+                        box-shadow: 0 0 15px rgba(0, 240, 255, 0.2), inset 0 0 15px rgba(0, 240, 255, 0.05) !important;
                     }
                     .dock-item:hover .dock-tooltip {
                         opacity: 1 !important;
                         transform: translateX(0) !important;
-                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                     }
                 `}</style>
             </motion.button>

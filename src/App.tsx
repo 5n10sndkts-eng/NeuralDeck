@@ -472,37 +472,39 @@ const AppContent: React.FC = () => {
                     <div className="flex w-full h-full gap-4 p-4" style={{ backgroundColor: 'var(--color-void)' }}>
                         {/* Background ambient glow */}
                         <div className="absolute inset-0 pointer-events-none" style={{
-                            background: 'radial-gradient(ellipse at 30% 20%, rgba(0, 240, 255, 0.04) 0%, transparent 50%)'
+                            background: 'radial-gradient(ellipse at 30% 20%, rgba(0, 240, 255, 0.05) 0%, transparent 50%)'
                         }} />
 
                         {/* File Explorer - Left sidebar */}
                         <div className="w-72 min-w-[260px] max-w-[300px] flex-shrink-0 flex flex-col relative z-10 overflow-hidden" style={{
-                            background: 'linear-gradient(135deg, rgba(10, 10, 18, 0.9) 0%, rgba(5, 5, 12, 0.95) 100%)',
-                            border: '1px solid rgba(0, 240, 255, 0.15)',
-                            borderRadius: '8px',
-                            backdropFilter: 'blur(20px)'
+                            background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.92) 0%, rgba(5, 5, 14, 0.96) 100%)',
+                            border: '1px solid rgba(0, 240, 255, 0.18)',
+                            borderRadius: '10px',
+                            backdropFilter: 'blur(24px)',
+                            boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
                         }}>
                             {/* Premium Header */}
-                            <div className="px-4 py-3 flex items-center gap-3 relative" style={{
-                                background: 'linear-gradient(180deg, rgba(10, 10, 20, 0.98) 0%, rgba(5, 5, 15, 0.95) 100%)',
-                                borderBottom: '1px solid rgba(0, 240, 255, 0.2)'
+                            <div className="px-4 py-3.5 flex items-center gap-3 relative" style={{
+                                background: 'linear-gradient(180deg, rgba(12, 12, 24, 0.98) 0%, rgba(6, 6, 16, 0.96) 100%)',
+                                borderBottom: '1px solid rgba(0, 240, 255, 0.22)'
                             }}>
                                 <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
-                                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.5) 50%, transparent 100%)'
+                                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.6) 50%, transparent 100%)',
+                                    boxShadow: '0 0 8px rgba(0, 240, 255, 0.3)'
                                 }} />
                                 <div style={{
                                     width: '8px',
                                     height: '8px',
                                     borderRadius: '50%',
                                     backgroundColor: '#00f0ff',
-                                    boxShadow: '0 0 8px #00f0ff'
+                                    boxShadow: '0 0 10px rgba(0, 240, 255, 0.7), 0 0 20px rgba(0, 240, 255, 0.4)'
                                 }} />
                                 <span style={{
                                     color: '#00f0ff',
                                     fontSize: '10px',
                                     fontWeight: 700,
                                     letterSpacing: '0.2em',
-                                    textShadow: '0 0 10px rgba(0, 240, 255, 0.5)'
+                                    textShadow: '0 0 10px rgba(0, 240, 255, 0.6)'
                                 }}>NEURAL_NET</span>
                             </div>
                             <div className="flex-1 overflow-hidden">
@@ -521,10 +523,11 @@ const AppContent: React.FC = () => {
                         <div className="flex-1 flex flex-col gap-4 min-w-0 relative z-10">
                             {/* Editor Panel */}
                             <div className="flex-[2] min-h-0 overflow-hidden" style={{
-                                background: 'linear-gradient(135deg, rgba(10, 10, 18, 0.9) 0%, rgba(5, 5, 12, 0.95) 100%)',
-                                border: '1px solid rgba(0, 240, 255, 0.15)',
-                                borderRadius: '8px',
-                                backdropFilter: 'blur(20px)'
+                                background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.92) 0%, rgba(5, 5, 14, 0.96) 100%)',
+                                border: '1px solid rgba(0, 240, 255, 0.18)',
+                                borderRadius: '10px',
+                                backdropFilter: 'blur(24px)',
+                                boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
                             }}>
                                 <TheEditor
                                     isOpen={true}
@@ -543,11 +546,12 @@ const AppContent: React.FC = () => {
                             </div>
 
                             {/* Terminal Panel */}
-                            <div className="flex-1 min-h-[180px] max-h-[280px] overflow-hidden" style={{
-                                background: 'linear-gradient(135deg, rgba(10, 10, 18, 0.9) 0%, rgba(5, 5, 12, 0.95) 100%)',
-                                border: '1px solid rgba(0, 240, 255, 0.15)',
-                                borderRadius: '8px',
-                                backdropFilter: 'blur(20px)'
+                            <div className="flex-1 min-h-[200px] max-h-[320px] overflow-hidden" style={{
+                                background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.92) 0%, rgba(5, 5, 14, 0.96) 100%)',
+                                border: '1px solid rgba(0, 240, 255, 0.18)',
+                                borderRadius: '10px',
+                                backdropFilter: 'blur(24px)',
+                                boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
                             }}>
                                 <TheTerminal
                                     messages={messages}
