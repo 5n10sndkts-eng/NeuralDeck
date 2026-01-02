@@ -75,9 +75,12 @@ export const queryContext = async (query: string): Promise<string> => {
 };
 
 // --- LEGACY / UI SUPPORT ---
-export const fetchFiles = async (): Promise<FileNode[]> => {
+export const fetchFiles = async (workspaceId?: string): Promise<FileNode[]> => {
   try {
-    const res = await fetch(`${API_BASE}/files`);
+    const url = workspaceId 
+      ? `${API_BASE}/files?workspaceId=${encodeURIComponent(workspaceId)}`
+      : `${API_BASE}/files`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch files');
     return res.json();
   } catch (error) {
@@ -85,23 +88,23 @@ export const fetchFiles = async (): Promise<FileNode[]> => {
   }
 };
 
-export const readFile = async (filePath: string): Promise<string> => {
+export const readFile = async (filePath: string, workspaceId?: string): Promise<string> => {
   try {
     const res = await fetch(`${API_BASE}/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filePath }),
+      body: JSON.stringify({ filePath, workspaceId }),
     });
     const data = await res.json();
     return data.content;
   } catch (error) { return "Error reading file"; }
 };
 
-export const writeFile = async (filePath: string, content: string): Promise<void> => {
+export const writeFile = async (filePath: string, content: string, workspaceId?: string): Promise<void> => {
   await fetch(`${API_BASE}/write`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filePath, content }),
+    body: JSON.stringify({ filePath, content, workspaceId }),
   });
 };
 
@@ -386,3 +389,167 @@ export const triggerThink = async (prompt: string): Promise<{ thoughts: Thought[
 
   return res.json();
 };
+
+// --- WORKSPACE MANAGEMENT ---
+
+export interface Workspace {
+  id: string;
+  path: string;
+  name: string;
+  lastOpened: number;
+  created: number;
+  isGitRepo: boolean;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  isGitRepo: boolean;
+  fileCount: number;
+}
+
+export interface BrowseResult {
+  entries: Array<{ name: string; path: string; isDirectory: boolean }>;
+  parent: string | null;
+  currentPath: string;
+}
+
+// Get all workspaces and active workspace
+export const getWorkspaces = async (): Promise<{ workspaces: Workspace[], active: Workspace | null }> => {
+  const res = await apiFetch(`${API_BASE}/workspaces`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get workspaces');
+  }
+  return res.json();
+};
+
+// Add new workspace
+export const addWorkspace = async (path: string, name?: string): Promise<Workspace> => {
+  const res = await apiFetch(`${API_BASE}/workspaces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, name }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to add workspace');
+  }
+
+  const data = await res.json();
+  return data.workspace;
+};
+
+// Activate a workspace
+export const activateWorkspace = async (id: string): Promise<Workspace> => {
+  const res = await apiFetch(`${API_BASE}/workspaces/${id}/activate`, {
+    method: 'POST',
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to activate workspace');
+  }
+
+  const data = await res.json();
+  return data.workspace;
+};
+
+// Remove workspace from list (doesn't delete files)
+export const removeWorkspace = async (id: string): Promise<void> => {
+  const res = await apiFetch(`${API_BASE}/workspaces/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to remove workspace');
+  }
+};
+
+// Validate workspace path
+export const validateWorkspacePath = async (path: string): Promise<ValidationResult> => {
+  const res = await apiFetch(`${API_BASE}/workspaces/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to validate path');
+  }
+
+  return res.json();
+};
+
+// Browse directory for folder picker
+export const browsePath = async (path?: string): Promise<BrowseResult> => {
+  const url = path 
+    ? `${API_BASE}/browse?path=${encodeURIComponent(path)}`
+    : `${API_BASE}/browse`;
+  
+  const res = await apiFetch(url);
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to browse directory');
+  }
+
+  return res.json();
+};
+
+// File CRUD operations (workspace-aware)
+export const createFile = async (path: string, workspaceId?: string): Promise<void> => {
+  const res = await apiFetch(`${API_BASE}/files/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, type: 'file', workspaceId }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to create file');
+  }
+};
+
+export const createFolder = async (path: string, workspaceId?: string): Promise<void> => {
+  const res = await apiFetch(`${API_BASE}/files/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, type: 'directory', workspaceId }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to create folder');
+  }
+};
+
+export const renameItem = async (oldPath: string, newPath: string, workspaceId?: string): Promise<void> => {
+  const res = await apiFetch(`${API_BASE}/files/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oldPath, newPath, workspaceId }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to rename item');
+  }
+};
+
+export const deleteItem = async (path: string, workspaceId?: string): Promise<void> => {
+  const res = await apiFetch(`${API_BASE}/files`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, workspaceId }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to delete item');
+  }
+};
+
