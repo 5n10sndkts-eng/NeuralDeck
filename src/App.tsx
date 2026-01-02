@@ -10,12 +10,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Contexts
 import { UIProvider, useUI } from './contexts/UIContext';
 import { ConversationProvider, useConversation } from './contexts/ConversationContext';
+import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext';
 import { HoloPanel } from './components/HoloPanel';
 import { useSocket } from './hooks/useSocket';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { MainLayout } from './components/MainLayout';
 import { CyberDock } from './components/CyberDock';
 import { TheOrchestrator } from './components/TheOrchestrator';
+import { WorkspaceManager } from './components/WorkspaceManager';
 
 // Core Components (Always loaded)
 import TheTerminal from './components/TheTerminal';
@@ -78,6 +80,16 @@ const AppContent: React.FC = () => {
         phase, logs, activeAgents, isAutoMode, toggleAuto, currentThought,
         connectionInfo, forceReconnect, forceReload  // Story 6-6
     } = useSocket();
+    const {
+        currentWorkspace,
+        files,
+        isLoading: isLoadingWorkspace,
+        refreshFiles,
+        createFile: workspaceCreateFile,
+        createFolder: workspaceCreateFolder,
+        renameItem: workspaceRenameItem,
+        deleteItem: workspaceDeleteItem,
+    } = useWorkspace();
     
     // --- CONVERSATION CONTEXT ---
     const {
@@ -98,13 +110,12 @@ const AppContent: React.FC = () => {
 
     // --- STATE ---
     const [view, setView] = useState<ViewMode>('workspace');
-    const [files, setFiles] = useState<FileNode[]>([]);
     const [fileContents, setFileContents] = useState<Record<string, string>>({});
     const [openFiles, setOpenFiles] = useState<string[]>([]);
     const [activeFile, setActiveFile] = useState<string | null>(null);
     const [showCmdPalette, setShowCmdPalette] = useState(false);
-    const [isLoadingFiles, setIsLoadingFiles] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
+    const [showWorkspaceManager, setShowWorkspaceManager] = useState(false);
 
     // Settings / Config - Initialize from LocalStorage
     const [profiles, setProfiles] = useState<ConnectionProfile[]>(() => {
@@ -278,13 +289,8 @@ const AppContent: React.FC = () => {
     const activeConfig = profiles.find(p => p.id === activeProfileId) || profiles[0];
 
     const loadFiles = async (background = false) => {
-        if (!background) setIsLoadingFiles(true);
-        try {
-            const data = await fetchFiles();
-            setFiles(data);
-        } finally {
-            if (!background) setIsLoadingFiles(false);
-        }
+        // Files are now managed by WorkspaceContext
+        await refreshFiles();
     };
 
     // --- STATE & DATA ---
@@ -307,6 +313,17 @@ const AppContent: React.FC = () => {
         const interval = setInterval(() => loadFiles(true), 5000); // Poll FS silently
         return () => clearInterval(interval);
     }, []);
+
+    // Show workspace manager on first run if no workspace selected
+    useEffect(() => {
+        if (!isLoadingWorkspace && !currentWorkspace) {
+            // Small delay to allow UI to render
+            const timer = setTimeout(() => {
+                setShowWorkspaceManager(true);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [isLoadingWorkspace, currentWorkspace]);
 
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => {
@@ -484,10 +501,15 @@ const AppContent: React.FC = () => {
                             boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
                         }}>
                             {/* Premium Header */}
-                            <div className="px-4 py-3.5 flex items-center gap-3 relative" style={{
-                                background: 'linear-gradient(180deg, rgba(12, 12, 24, 0.98) 0%, rgba(6, 6, 16, 0.96) 100%)',
-                                borderBottom: '1px solid rgba(0, 240, 255, 0.22)'
-                            }}>
+                            <div 
+                                className="px-4 py-3.5 flex items-center gap-3 relative cursor-pointer transition-all"
+                                onClick={() => setShowWorkspaceManager(true)}
+                                style={{
+                                    background: 'linear-gradient(180deg, rgba(12, 12, 24, 0.98) 0%, rgba(6, 6, 16, 0.96) 100%)',
+                                    borderBottom: '1px solid rgba(0, 240, 255, 0.22)'
+                                }}
+                                title="Click to manage workspaces"
+                            >
                                 <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
                                     background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.6) 50%, transparent 100%)',
                                     boxShadow: '0 0 8px rgba(0, 240, 255, 0.3)'
@@ -496,16 +518,34 @@ const AppContent: React.FC = () => {
                                     width: '8px',
                                     height: '8px',
                                     borderRadius: '50%',
-                                    backgroundColor: '#00f0ff',
-                                    boxShadow: '0 0 10px rgba(0, 240, 255, 0.7), 0 0 20px rgba(0, 240, 255, 0.4)'
+                                    backgroundColor: currentWorkspace ? '#00ff88' : '#ff4466',
+                                    boxShadow: currentWorkspace 
+                                        ? '0 0 10px rgba(0, 255, 136, 0.7), 0 0 20px rgba(0, 255, 136, 0.4)'
+                                        : '0 0 10px rgba(255, 68, 102, 0.7), 0 0 20px rgba(255, 68, 102, 0.4)'
                                 }} />
-                                <span style={{
-                                    color: '#00f0ff',
-                                    fontSize: '10px',
-                                    fontWeight: 700,
-                                    letterSpacing: '0.2em',
-                                    textShadow: '0 0 10px rgba(0, 240, 255, 0.6)'
-                                }}>NEURAL_NET</span>
+                                <div className="flex-1 min-w-0">
+                                    <div style={{
+                                        color: '#00f0ff',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        letterSpacing: '0.2em',
+                                        textShadow: '0 0 10px rgba(0, 240, 255, 0.6)'
+                                    }}>
+                                        {currentWorkspace ? currentWorkspace.name.toUpperCase() : 'NO WORKSPACE'}
+                                    </div>
+                                    {currentWorkspace && (
+                                        <div style={{
+                                            color: '#666',
+                                            fontSize: '9px',
+                                            marginTop: '2px',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
+                                        }} title={currentWorkspace.path}>
+                                            {currentWorkspace.path}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex-1 overflow-hidden">
                                 <NeuralLink
@@ -514,7 +554,7 @@ const AppContent: React.FC = () => {
                                     activeFile={activeFile}
                                     openFiles={openFiles}
                                     isOpen={true}
-                                    isLoading={isLoadingFiles}
+                                    isLoading={isLoadingWorkspace}
                                 />
                             </div>
                         </div>
@@ -773,6 +813,11 @@ const AppContent: React.FC = () => {
             />
 
             <KeyboardHelp />
+
+            <WorkspaceManager
+                isOpen={showWorkspaceManager}
+                onClose={() => setShowWorkspaceManager(false)}
+            />
         </MainLayout>
     );
 };
@@ -782,7 +827,9 @@ const App: React.FC = () => {
     return (
         <UIProvider>
             <ConversationProvider>
-                <AppContent />
+                <WorkspaceProvider>
+                    <AppContent />
+                </WorkspaceProvider>
             </ConversationProvider>
         </UIProvider>
     );
