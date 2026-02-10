@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { LogEntry, NeuralPhase } from './useNeuralAutonomy'; // Reuse types for now
-import { AgentProfile, AgentNodeState, VulnerabilityFinding, SecurityReport, VulnerabilitySeverity } from '../types';
+import { LogEntry } from './useNeuralAutonomy';
+import { AgentProfile, AgentNodeState, VulnerabilityFinding, SecurityReport, VulnerabilitySeverity, NeuralPhase } from '../types';
 import { authService } from '../services/auth';
 
 // --- CONNECTION STATE TYPES (Story 6-6) ---

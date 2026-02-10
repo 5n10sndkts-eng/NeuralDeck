@@ -2,7 +2,7 @@
 
 ## 🚀 System Status
 - **Backend:** Online (`http://localhost:3001`)
-- **Frontend:** Online (`http://localhost:3002`)
+- **Frontend:** Online (`http://localhost:5173`)
 - **Autonomy Engine:** Active
 - **RAG Engine:** Integrated (Local/In-Memory)
 - **3D Engine:** Online (The Construct)
@@ -37,7 +37,7 @@
     node server.cjs # Starts Fastify Backend
     ```
 2.  **Access the Deck:**
-    - Go to `http://localhost:3002`.
+    - Go to `http://localhost:5173`.
     - Check the **"Neural Orchestrator"** tab to see the Swarm in action.
     - Click the **Server/Database Icon ("Immerse")** in the Dock to enter **The Construct**.
 3.  **Trigger Autonomy:**

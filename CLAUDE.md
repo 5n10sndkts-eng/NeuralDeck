@@ -45,7 +45,7 @@ npm run preview          # Preview production build
   - `/api/docker/*` - Dockerfile generation and validation
 
 ### Agent System
-- **Agent definitions:** `src/services/agent.ts` defines 12 agent personas (analyst, architect, developer, etc.)
+- **Agent definitions:** `src/services/agent.ts` defines 16 agent personas (analyst, product_manager, ux_designer, architect, scrum_master, developer, qa_engineer, sec_auditor, optimizer, devops, tech_writer, red_teamer, merger, pen_tester, vuln_scanner, code_auditor)
 - **Agent cycle:** `runAgentCycle()` manages LLM interactions with tool-calling JSON format
 - **Phases:** `NeuralPhase` type tracks workflow stages (idle -> analysis -> planning -> implementation -> etc.)
 

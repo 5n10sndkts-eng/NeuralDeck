@@ -35,4 +35,4 @@ NeuralDeck is a high-fidelity **AI Agent Workstation** built with React, Vite, a
     npm run dev
     ```
 3.  **Access the Deck:**
-    Open `http://localhost:3002` (or the port shown in your terminal).
+    Open `http://localhost:5173` for the frontend (Vite dev server) or `http://localhost:3001` for the backend API.

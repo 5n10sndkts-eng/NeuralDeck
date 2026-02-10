@@ -150,8 +150,8 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     dispatch({ type: 'SET_SESSIONS', payload: sessions });
   }, [loadSession, storage]);
 
-  // Create a new session
-  const newSession = useCallback(async (title?: string) => {
+  // Create a new session (returns session ID for immediate use)
+  const newSession = useCallback(async (title?: string): Promise<string | undefined> => {
     try {
       const session = await storage.createSession(title);
       const sessions = await storage.listSessions();
@@ -160,27 +160,32 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       dispatch({ type: 'SET_MESSAGES', payload: [] });
       localStorage.setItem(LAST_SESSION_KEY, session.id);
       console.log('[Conversation] Created new session:', session.id);
+      return session.id;
     } catch (error) {
       console.error('[Conversation] Error creating session:', error);
+      return undefined;
     }
   }, [storage]);
 
   // Add a message to current session
   const addMessage = useCallback(async (message: ChatMessage) => {
-    if (!state.currentSessionId) {
+    let sessionId = state.currentSessionId;
+
+    if (!sessionId) {
       console.warn('[Conversation] No active session, creating new one');
-      await newSession();
-      // After creating new session, state.currentSessionId will be updated
-      // We need to wait for the next render cycle
-      return;
+      sessionId = await newSession() ?? null;
+      if (!sessionId) {
+        console.error('[Conversation] Failed to create session, message dropped');
+        return;
+      }
     }
 
     try {
-      await storage.addMessage(state.currentSessionId, message);
+      await storage.addMessage(sessionId, message);
       dispatch({ type: 'ADD_MESSAGE', payload: message });
-      
+
       // Update session in list
-      const updatedSession = await storage.getSession(state.currentSessionId);
+      const updatedSession = await storage.getSession(sessionId);
       if (updatedSession) {
         dispatch({ type: 'UPDATE_SESSION', payload: updatedSession });
       }

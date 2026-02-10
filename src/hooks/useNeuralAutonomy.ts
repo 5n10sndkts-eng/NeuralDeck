@@ -1,8 +1,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { FileNode, ConnectionProfile, AgentProfile } from '../types';
-
-export type NeuralPhase = 'idle' | 'analysis' | 'planning' | 'architecture' | 'implementation' | 'review';
+import { FileNode, ConnectionProfile, AgentProfile, NeuralPhase } from '../types';
 
 export interface LogEntry {
     type: 'info' | 'error' | 'success' | 'command';
@@ -31,42 +29,46 @@ export const useNeuralAutonomy = (
         // Flatten file list for easy checking
         const flatFiles = flatten(files);
 
-        // 1. ANALYSIS PHASE
-        // Check if Analyst has done work (scan report)
+        // Detect artifacts from each phase
         const hasScan = flatFiles.some(f => f.includes('docs/project-scan-report.json'));
-
-        // 2. PLANNING PHASE
-        // Check if PM has done PRD
         const hasPRD = flatFiles.some(f => f.includes('docs/prd.md'));
-
-        // 3. ARCHITECTURE PHASE
-        // Check if Architect has done Architecture
+        const hasDesign = flatFiles.some(f => f.includes('docs/ux-design.md') || f.includes('docs/design.md'));
         const hasArch = flatFiles.some(f => f.includes('docs/architecture.md'));
-
-        // 4. IMPLEMENTATION PHASE
-        // Check if Scrum Master has created Stories
         const hasStories = flatFiles.some(f => f.includes('stories/'));
+        const hasTests = flatFiles.some(f => f.includes('.test.') || f.includes('.spec.'));
+        const hasReview = flatFiles.some(f => f.includes('docs/review-report.md'));
+        const hasDocs = flatFiles.some(f => f.includes('docs/api-docs.md') || f.includes('docs/README.md'));
+        const hasDeployConfig = flatFiles.some(f => f.includes('Dockerfile') || f.includes('docker-compose') || f.includes('.deploy'));
 
-        // Determine current state based on what DOESN'T exist yet (The "Next Step")
-
-        if (hasStories) {
-            // Implementation Phase: Swarm is working on stories
+        // Determine current phase based on completed artifacts (progressive)
+        if (hasDeployConfig && hasDocs) {
+            setPhase('finished');
+            setActiveAgentIds([]);
+        } else if (hasDeployConfig) {
+            setPhase('documentation');
+            setActiveAgentIds(['tech_writer']);
+        } else if (hasReview) {
+            setPhase('deployment');
+            setActiveAgentIds(['devops']);
+        } else if (hasTests && hasStories) {
+            setPhase('review');
+            setActiveAgentIds(['qa_engineer', 'sec_auditor']);
+        } else if (hasStories) {
             setPhase('implementation');
             setActiveAgentIds(['developer']);
         } else if (hasArch) {
-            // Architecture Done -> Needs Scrum Master to plan Sprint
-            setPhase('planning'); // Sprint Planning
+            setPhase('scrum');
             setActiveAgentIds(['scrum_master']);
-        } else if (hasPRD) {
-            // PRD Done -> Needs Architect
+        } else if (hasDesign) {
             setPhase('architecture');
             setActiveAgentIds(['architect']);
+        } else if (hasPRD) {
+            setPhase('design');
+            setActiveAgentIds(['ux_designer']);
         } else if (hasScan) {
-            // Scan Done -> Needs PM to write PRD
             setPhase('planning');
             setActiveAgentIds(['product_manager']);
         } else {
-            // Nothing done -> Needs Analyst
             setPhase('analysis');
             setActiveAgentIds(['analyst']);
         }

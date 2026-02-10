@@ -442,35 +442,71 @@ const AppContent: React.FC = () => {
     };
 
     // --- VISION ANALYSIS HANDLER ---
-    const simulateVisionAnalysis = async (file: File) => {
+    const analyzeVision = async (file: File) => {
         setVisionAnalysisLog([]);
-        const steps = [
-            'Scanning pixels...',
-            'Identifying components...',
-            'OCR Extraction in progress...',
-            'Analyzing UI structure...',
-            'Detecting interactive elements...',
-            'Mapping visual hierarchy...',
-            'Analysis complete.'
-        ];
 
-        for (let i = 0; i < steps.length; i++) {
-            await new Promise(resolve => setTimeout(resolve, 800));
-            setVisionAnalysisLog(prev => [...prev, steps[i]]);
+        const logStep = async (msg: string) => {
+            setVisionAnalysisLog(prev => [...prev, msg]);
+            await addMessage({ role: 'system', content: `[VISION CORTEX] ${msg}`, timestamp: Date.now() });
+        };
 
-            // Also log to terminal messages
-            const analysisMsg: ChatMessage = {
+        await logStep('Encoding image for analysis...');
+
+        try {
+            // Convert file to base64 data URL
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            await logStep('Sending to vision model...');
+
+            const visionMessages: ChatMessage[] = [
+                {
+                    role: 'system',
+                    content: 'You are a UI/UX analysis assistant. Analyze the provided image and describe: 1) UI components visible, 2) Layout structure, 3) Interactive elements, 4) Any text content (OCR), 5) Suggestions for improvement.',
+                    timestamp: Date.now()
+                },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: 'Analyze this image in detail.' },
+                        { type: 'image_url', image_url: { url: base64 } }
+                    ] as any,
+                    timestamp: Date.now()
+                }
+            ];
+
+            const response = await sendChat(visionMessages, {
+                provider: activeConfig.provider,
+                model: activeConfig.model,
+                baseUrl: activeConfig.baseUrl
+            });
+
+            await logStep('Analysis complete.');
+            await addMessage({
+                role: 'assistant',
+                content: response.content,
+                timestamp: Date.now(),
+                agent: 'analyst'
+            });
+        } catch (error) {
+            const errMsg = error instanceof Error ? error.message : 'Unknown error';
+            await logStep(`Analysis failed: ${errMsg}`);
+            // Fallback: still show the image was received
+            await addMessage({
                 role: 'system',
-                content: `[VISION CORTEX] ${steps[i]}`,
+                content: `[VISION CORTEX] Could not analyze image: ${errMsg}. Ensure a vision-capable model is configured (e.g., gpt-4o, llava).`,
                 timestamp: Date.now()
-            };
-            await addMessage(analysisMsg);
+            });
         }
     };
 
     const handleFileDrop = (file: File) => {
         setDroppedFile(file);
-        simulateVisionAnalysis(file);
+        analyzeVision(file);
     };
 
     const handleCloseVisionPreview = () => {
@@ -679,21 +715,43 @@ const AppContent: React.FC = () => {
                     </ChunkErrorBoundary>
                 );
 
-            case 'connections': 
+            case 'connections':
                 return (
                     <ChunkErrorBoundary>
                         <Suspense fallback={<LoadingSkeleton message="LOADING CONNECTIONS..." />}>
-                            <TheConnections 
-                                profiles={profiles} 
-                                agentRouting={agentRouting} 
-                                activeProfileId={activeProfileId} 
-                                onUpdateProfiles={setProfiles} 
-                                onUpdateRouting={setAgentRouting} 
-                                onUpdateActiveProfile={setActiveProfileId} 
+                            <TheConnections
+                                profiles={profiles}
+                                agentRouting={agentRouting}
+                                activeProfileId={activeProfileId}
+                                onUpdateProfiles={setProfiles}
+                                onUpdateRouting={setAgentRouting}
+                                onUpdateActiveProfile={setActiveProfileId}
                             />
                         </Suspense>
                     </ChunkErrorBoundary>
                 );
+
+            case 'terminal':
+                return (
+                    <div className="flex w-full h-full p-4" style={{ backgroundColor: 'var(--color-void)' }}>
+                        <div className="w-full h-full overflow-hidden" style={{
+                            background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.92) 0%, rgba(5, 5, 14, 0.96) 100%)',
+                            border: '1px solid rgba(0, 240, 255, 0.18)',
+                            borderRadius: '10px',
+                            backdropFilter: 'blur(24px)',
+                            boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
+                        }}>
+                            <TheTerminal
+                                messages={messages}
+                                onSendMessage={handleSendMessage}
+                                isThinking={activeAgents.length > 0}
+                                onTransferCode={handleCodeTransfer}
+                                activePersona={activeAgents.length > 0 ? undefined : manualSelectedAgent}
+                            />
+                        </div>
+                    </div>
+                );
+
             default: return (
                 <div className="flex items-center justify-center h-full text-cyber-cyan opacity-50 font-mono">
                     MODULE_OFFLINE

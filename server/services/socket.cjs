@@ -14,9 +14,18 @@ const initSocket = (httpServer, options = {}) => {
     activeSessions = options.activeSessions;
     securityLogger = options.securityLogger;
 
+    const allowedOrigins = process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',')
+        : [
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:5173'
+        ];
+
     io = new Server(httpServer, {
         cors: {
-            origin: "*", // Allow all for now (Localhost dev)
+            origin: process.env.NODE_ENV === 'production' ? allowedOrigins : '*',
             methods: ["GET", "POST"]
         }
     });

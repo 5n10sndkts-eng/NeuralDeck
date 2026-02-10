@@ -60,6 +60,23 @@ const REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days in seconds
 // In-memory session store (use Redis in production)
 const activeSessions = new Map();
 
+// Session cleanup: remove expired/invalidated sessions every 10 minutes
+const SESSION_CLEANUP_INTERVAL = 10 * 60 * 1000;
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [sessionId, session] of activeSessions.entries()) {
+        const age = (now - session.createdAt) / 1000;
+        if (session.invalidated || age > SESSION_EXPIRY) {
+            activeSessions.delete(sessionId);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) {
+        console.log(`[SESSION] Cleaned ${cleaned} expired sessions. Active: ${activeSessions.size}`);
+    }
+}, SESSION_CLEANUP_INTERVAL);
+
 // --- COMMAND SECURITY - Story 1.2 ---
 
 // Expanded whitelist of allowed base commands
@@ -121,9 +138,26 @@ const validateCommand = (cmd, ip) => {
         return { valid: false, reason: 'Command must be a string' };
     }
 
-    // Check for command chaining/interpolation
+    // Check for command chaining/interpolation/substitution
     if (/[;&|`$]/.test(cmd)) {
         return { valid: false, reason: 'Command chaining or interpolation not allowed' };
+    }
+
+    // Block newline injection
+    if (/[\n\r]/.test(cmd)) {
+        return { valid: false, reason: 'Newline characters not allowed in commands' };
+    }
+
+    // Block @file patterns that could read arbitrary files via npm/tsc
+    if (/@[a-zA-Z]/.test(cmd) && !/^@[a-z0-9\-~][a-z0-9\-._~]*\//.test(cmd.split(/\s+/).find(a => a.startsWith('@')) || '')) {
+        // Allow scoped npm packages like @types/node but block @configfile patterns
+        const atArgs = cmd.split(/\s+/).filter(a => a.startsWith('@'));
+        for (const arg of atArgs) {
+            // Valid scoped package: @scope/name
+            if (!/^@[a-z0-9\-~][a-z0-9\-._~]*\/[a-z0-9\-._~]+/.test(arg)) {
+                return { valid: false, reason: 'Potential @file injection pattern detected' };
+            }
+        }
     }
 
     // Check against dangerous patterns
@@ -615,6 +649,24 @@ async function start() {
             timestamp: Date.now(),
             version: '2.0.0-CYBER-FASTIFY'
         };
+    });
+
+    // CSP Violation Report Endpoint
+    fastify.post('/api/csp-report', async (request, reply) => {
+        try {
+            const report = request.body?.['csp-report'] || request.body;
+            fastify.log.warn(`[CSP VIOLATION] ${JSON.stringify({
+                blockedUri: report?.['blocked-uri'],
+                violatedDirective: report?.['violated-directive'],
+                documentUri: report?.['document-uri'],
+                sourceFile: report?.['source-file'],
+                lineNumber: report?.['line-number']
+            })}`);
+            return { received: true };
+        } catch (e) {
+            fastify.log.error(`[CSP] Report parsing error: ${e.message}`);
+            return { received: false };
+        }
     });
 
     // File System: List
@@ -1127,9 +1179,54 @@ async function start() {
     // Story 6-7: Diff Preview & Apply Endpoints
     // ========================================
 
-    // Pending diffs storage (in-memory for session)
+    // Pending diffs storage with file persistence
     const pendingDiffs = new Map();
     let diffIdCounter = 1;
+    const DIFFS_PERSIST_PATH = path.join(WORKSPACE_PATH, '.neuraldeck', 'pending-diffs.json');
+
+    // Load persisted diffs on startup
+    (async () => {
+        try {
+            const data = await fs.readFile(DIFFS_PERSIST_PATH, 'utf-8');
+            const saved = JSON.parse(data);
+            for (const diff of saved) {
+                if (diff.status === 'pending') {
+                    pendingDiffs.set(diff.id, diff);
+                    const idNum = parseInt(diff.id.replace('diff-', ''), 10);
+                    if (idNum >= diffIdCounter) diffIdCounter = idNum + 1;
+                }
+            }
+            fastify.log.info(`[DIFF] Restored ${pendingDiffs.size} pending diffs from disk`);
+        } catch { /* No persisted diffs - first run */ }
+    })();
+
+    // Persist diffs to disk
+    const persistDiffs = async () => {
+        try {
+            await fs.mkdir(path.dirname(DIFFS_PERSIST_PATH), { recursive: true });
+            const data = Array.from(pendingDiffs.values());
+            await fs.writeFile(DIFFS_PERSIST_PATH, JSON.stringify(data, null, 2), 'utf-8');
+        } catch (e) {
+            fastify.log.warn(`[DIFF] Persist failed: ${e.message}`);
+        }
+    };
+
+    // Cleanup expired diffs every 5 minutes
+    setInterval(async () => {
+        const now = Date.now();
+        const DIFF_TTL = 24 * 60 * 60 * 1000; // 24 hours
+        let cleaned = 0;
+        for (const [id, diff] of pendingDiffs.entries()) {
+            if (diff.status !== 'pending' || (now - diff.createdAt) > DIFF_TTL) {
+                pendingDiffs.delete(id);
+                cleaned++;
+            }
+        }
+        if (cleaned > 0) {
+            fastify.log.info(`[DIFF] Cleaned ${cleaned} expired diffs. Remaining: ${pendingDiffs.size}`);
+            await persistDiffs();
+        }
+    }, 5 * 60 * 1000);
 
     // Diff: Preview changes before applying
     fastify.post('/api/diff/preview', { preHandler: optionalAuth }, async (request, reply) => {
@@ -1187,6 +1284,7 @@ async function start() {
             };
 
             pendingDiffs.set(diffId, diffRecord);
+            await persistDiffs();
 
             fastify.log.info(`[DIFF] Preview created: ${diffId} for ${filePath} (+${additions}/-${deletions})`);
 
@@ -1250,6 +1348,7 @@ async function start() {
             diff.status = 'applied';
             diff.appliedAt = Date.now();
             diff.appliedBy = request.user?.userId || 'anonymous';
+            await persistDiffs();
 
             // Log to security logger
             await securityLogger.logFileWrite(
@@ -1261,13 +1360,11 @@ async function start() {
             fastify.log.info(`[DIFF] Applied: ${diffId} to ${diff.path}`);
 
             // Emit socket event for real-time update
-            if (socketService) {
-                socketService.broadcastToAll('diff:applied', {
-                    diffId,
-                    path: diff.path,
-                    agentId: diff.agentId
-                });
-            }
+            broadcast('diff:applied', {
+                diffId,
+                path: diff.path,
+                agentId: diff.agentId
+            });
 
             return {
                 success: true,
@@ -1304,18 +1401,17 @@ async function start() {
             diff.rejectedAt = Date.now();
             diff.rejectedBy = request.user?.userId || 'anonymous';
             diff.rejectionReason = reason || null;
+            await persistDiffs();
 
             fastify.log.info(`[DIFF] Rejected: ${diffId} for ${diff.path}${reason ? ` (${reason})` : ''}`);
 
             // Emit socket event for real-time update
-            if (socketService) {
-                socketService.broadcastToAll('diff:rejected', {
-                    diffId,
-                    path: diff.path,
-                    agentId: diff.agentId,
-                    reason
-                });
-            }
+            broadcast('diff:rejected', {
+                diffId,
+                path: diff.path,
+                agentId: diff.agentId,
+                reason
+            });
 
             return {
                 success: true,
@@ -1431,13 +1527,11 @@ async function start() {
             fastify.log.info(`[CHECKPOINT] Restored: ${checkpointId} to ${result.filePath}`);
 
             // Emit socket event for real-time update
-            if (socketService) {
-                socketService.broadcastToAll('checkpoint:restored', {
-                    checkpointId,
-                    filePath: result.filePath,
-                    restoredFrom: result.restoredFrom,
-                });
-            }
+            broadcast('checkpoint:restored', {
+                checkpointId,
+                filePath: result.filePath,
+                restoredFrom: result.restoredFrom,
+            });
 
             return result;
         } catch (e) {
@@ -1636,7 +1730,7 @@ async function start() {
         } else if (provider === 'openai') {
             targetUrl = 'https://api.openai.com/v1';
         } else if (provider === 'lmstudio') {
-            targetUrl = 'http://192.168.100.190:1234/v1';
+            targetUrl = process.env.LMSTUDIO_URL || 'http://localhost:1234/v1';
         } else {
             targetUrl = 'http://localhost:8000/v1';
         }
@@ -1645,6 +1739,8 @@ async function start() {
         const targetModel = (model || 'openai/gpt-oss-20b').trim(); // Sanitize model name
 
         fastify.log.info(`[GATEWAY] Proxying to ${targetUrl} [Model: ${targetModel}]`);
+
+        const wantStream = request.body.stream === true;
 
         try {
             const response = await fetch(`${targetUrl}/chat/completions`, {
@@ -1658,17 +1754,54 @@ async function start() {
                     messages: messages,
                     temperature: temperature || 0.7,
                     max_tokens: 4096,
-                    stream: false
+                    stream: wantStream
                 })
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
                 fastify.log.error(`[GATEWAY ERROR] ${errorText}`);
-                reply.code(response.status).send({ error: `Upstream Error: ${errorText}` });
+
+                // Return specific status codes based on upstream error
+                const status = response.status;
+                if (status === 401) {
+                    reply.code(401).send({ error: 'Authentication failed with AI provider. Check your API key.' });
+                } else if (status === 429) {
+                    reply.code(429).send({ error: 'Rate limited by AI provider. Please wait and try again.' });
+                } else if (status === 503 || status === 502) {
+                    reply.code(503).send({ error: 'AI provider is currently unavailable. Try again later.' });
+                } else {
+                    reply.code(status).send({ error: `Upstream Error: ${errorText}` });
+                }
                 return;
             }
 
+            // Streaming mode: pipe SSE chunks to client
+            if (wantStream && response.body) {
+                reply.raw.writeHead(200, {
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive'
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        reply.raw.write(decoder.decode(value, { stream: true }));
+                    }
+                } catch (streamErr) {
+                    fastify.log.error(`[GATEWAY] Stream error: ${streamErr.message}`);
+                } finally {
+                    reply.raw.end();
+                }
+                return;
+            }
+
+            // Non-streaming mode: return full response
             const data = await response.json();
             return data;
 
@@ -1759,6 +1892,89 @@ async function start() {
                     });
                     fastify.log.info(`[COMMAND] git_log success from ${clientIp}: ${lines.length} commits`);
                     resolve({ result: JSON.stringify(lines) });
+                });
+            });
+        }
+
+        // Git Show Tool - show commit details
+        if (tool === 'git_show') {
+            const ref = typeof args?.ref === 'string' ? args.ref.replace(/[^a-zA-Z0-9._\-\/~^]/g, '') : 'HEAD';
+            const cmd = `git show --stat --format=fuller ${ref}`;
+
+            fastify.log.info(`[COMMAND] Executing git_show: ref=${ref} from ${clientIp}`);
+
+            return new Promise((resolve) => {
+                exec(cmd, EXEC_OPTIONS, (error, stdout, stderr) => {
+                    if (error) {
+                        fastify.log.warn(`[COMMAND] git_show failed from ${clientIp}: ${error.message}`);
+                        return resolve({ result: JSON.stringify({ error: error.message }) });
+                    }
+                    fastify.log.info(`[COMMAND] git_show success from ${clientIp}`);
+                    resolve({ result: stdout });
+                });
+            });
+        }
+
+        // NPM Install Tool - install packages
+        if (tool === 'npm_install') {
+            const packages = args?.packages;
+            let cmd;
+
+            if (packages && typeof packages === 'string') {
+                // Validate package names: only allow valid npm package name characters
+                const pkgList = packages.split(/\s+/).filter(Boolean);
+                const validPkg = /^(@[a-z0-9\-~][a-z0-9\-._~]*\/)?[a-z0-9\-~][a-z0-9\-._~]*(@[^\s]+)?$/;
+                for (const pkg of pkgList) {
+                    if (!validPkg.test(pkg)) {
+                        return { result: JSON.stringify({ error: `Invalid package name: ${pkg}` }) };
+                    }
+                }
+                const isDev = args?.dev === true ? ' --save-dev' : '';
+                cmd = `npm install ${pkgList.join(' ')}${isDev}`;
+            } else {
+                cmd = 'npm install';
+            }
+
+            fastify.log.info(`[COMMAND] Executing npm_install from ${clientIp}: ${cmd}`);
+
+            return new Promise((resolve) => {
+                exec(cmd, { ...EXEC_OPTIONS, timeout: 120000 }, (error, stdout, stderr) => {
+                    if (error) {
+                        fastify.log.warn(`[COMMAND] npm_install failed from ${clientIp}: ${error.message}`);
+                        return resolve({ result: JSON.stringify({ error: stderr || error.message, exitCode: error.code || 1 }) });
+                    }
+                    fastify.log.info(`[COMMAND] npm_install success from ${clientIp}`);
+                    resolve({ result: JSON.stringify({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 }) });
+                });
+            });
+        }
+
+        // NPM Uninstall Tool - remove packages
+        if (tool === 'npm_uninstall') {
+            const packages = args?.packages;
+            if (!packages || typeof packages !== 'string') {
+                return { result: JSON.stringify({ error: 'packages parameter required (space-separated package names)' }) };
+            }
+
+            const pkgList = packages.split(/\s+/).filter(Boolean);
+            const validPkg = /^(@[a-z0-9\-~][a-z0-9\-._~]*\/)?[a-z0-9\-~][a-z0-9\-._~]*$/;
+            for (const pkg of pkgList) {
+                if (!validPkg.test(pkg)) {
+                    return { result: JSON.stringify({ error: `Invalid package name: ${pkg}` }) };
+                }
+            }
+
+            const cmd = `npm uninstall ${pkgList.join(' ')}`;
+            fastify.log.info(`[COMMAND] Executing npm_uninstall from ${clientIp}: ${cmd}`);
+
+            return new Promise((resolve) => {
+                exec(cmd, { ...EXEC_OPTIONS, timeout: 120000 }, (error, stdout, stderr) => {
+                    if (error) {
+                        fastify.log.warn(`[COMMAND] npm_uninstall failed from ${clientIp}: ${error.message}`);
+                        return resolve({ result: JSON.stringify({ error: stderr || error.message, exitCode: error.code || 1 }) });
+                    }
+                    fastify.log.info(`[COMMAND] npm_uninstall success from ${clientIp}`);
+                    resolve({ result: JSON.stringify({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 }) });
                 });
             });
         }
