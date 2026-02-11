@@ -28,3 +28,7 @@ Thumbs.db
 .cursor
 .neuraldeck
 
+# OpenCode custom agents (machine-specific configurations)
+.opencode/agents/*.md
+!.opencode/agents/README.md
+

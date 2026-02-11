@@ -1,0 +1,44 @@
+{
+  "version": "1.0.0",
+  "description": "Routing configuration for NeuralDeck agent requests",
+  "routing_strategy": "agent-based",
+  "fallback_enabled": true,
+  "fallback_notify_ui": true,
+  "rules": {
+    "opencode_agents": [
+      "architect",
+      "analyst",
+      "product_manager",
+      "scrum_master",
+      "ux_designer",
+      "qa_engineer",
+      "sec_auditor",
+      "devops",
+      "red_teamer",
+      "merger",
+      "pen_tester",
+      "vuln_scanner",
+      "code_auditor"
+    ],
+    "local_agents": [
+      "developer",
+      "optimizer",
+      "tech_writer"
+    ],
+    "opencode_timeout_ms": 120000,
+    "local_timeout_ms": 60000,
+    "retry_on_failure": true,
+    "max_retries": 2
+  },
+  "opencode_config": {
+    "cli_path": "/Applications/OpenCode.app/Contents/MacOS/opencode-cli",
+    "desktop_url": "http://localhost:61203",
+    "session_cache_path": ".neuraldeck/session-cache.json",
+    "agent_mappings_path": ".neuraldeck/agent-mappings.json"
+  },
+  "error_handling": {
+    "fallback_to_local_on_error": true,
+    "log_errors": true,
+    "notify_user_on_fallback": true
+  }
+}

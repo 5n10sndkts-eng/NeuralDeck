@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "description": "Cached OpenCode session IDs for NeuralDeck agents",
+  "last_updated": null,
+  "sessions": {}
+}

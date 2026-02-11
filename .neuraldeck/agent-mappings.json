@@ -1,0 +1,142 @@
+{
+  "version": "1.0.0",
+  "description": "Maps NeuralDeck agent IDs to OpenCode agent names and routing strategies",
+  "last_updated": "2026-02-11T17:31:00.000Z",
+  "mappings": {
+    "architect": {
+      "opencode_agent": "plan",
+      "type": "built-in",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "System architecture and design planning"
+    },
+    "analyst": {
+      "opencode_agent": "explore",
+      "type": "built-in",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Requirements analysis and exploration"
+    },
+    "product_manager": {
+      "opencode_agent": "plan",
+      "type": "built-in",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Product planning and PRD creation"
+    },
+    "scrum_master": {
+      "opencode_agent": "plan",
+      "type": "built-in",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Task breakdown and sprint planning"
+    },
+    "developer": {
+      "opencode_agent": "build",
+      "type": "built-in",
+      "routing": "local",
+      "category": "tactical",
+      "session_required": false,
+      "description": "Fast code implementation (local LLM)"
+    },
+    "optimizer": {
+      "opencode_agent": "compaction",
+      "type": "built-in",
+      "routing": "local",
+      "category": "tactical",
+      "session_required": false,
+      "description": "Performance optimization (local LLM)"
+    },
+    "tech_writer": {
+      "opencode_agent": "summary",
+      "type": "built-in",
+      "routing": "local",
+      "category": "tactical",
+      "session_required": false,
+      "description": "Documentation generation (local LLM)"
+    },
+    "ux_designer": {
+      "opencode_agent": "ux-designer",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "UI/UX design and design systems"
+    },
+    "qa_engineer": {
+      "opencode_agent": "qa-engineer",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "tactical",
+      "session_required": true,
+      "description": "Quality assurance and testing"
+    },
+    "sec_auditor": {
+      "opencode_agent": "security-auditor",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Security auditing and compliance"
+    },
+    "devops": {
+      "opencode_agent": "devops-engineer",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Infrastructure and deployment"
+    },
+    "red_teamer": {
+      "opencode_agent": "red-team",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Adversarial testing and attack simulation"
+    },
+    "merger": {
+      "opencode_agent": "merge-resolver",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "tactical",
+      "session_required": true,
+      "description": "Git merge conflict resolution"
+    },
+    "pen_tester": {
+      "opencode_agent": "penetration-tester",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Penetration testing and exploit discovery"
+    },
+    "vuln_scanner": {
+      "opencode_agent": "vuln-scanner",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "tactical",
+      "session_required": true,
+      "description": "Automated vulnerability scanning"
+    },
+    "code_auditor": {
+      "opencode_agent": "code-auditor",
+      "type": "custom",
+      "routing": "opencode",
+      "category": "strategic",
+      "session_required": true,
+      "description": "Security code review and auditing"
+    }
+  },
+  "stats": {
+    "total_agents": 16,
+    "opencode_routed": 13,
+    "local_routed": 3,
+    "built_in": 7,
+    "custom": 9
+  }
+}
