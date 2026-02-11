@@ -1,38 +1,81 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# NeuralDeck v2.0 (Neon Prime)
 
-# Run and deploy your AI Studio app
+> "The Deck is your weapon. The Agents are your crew."
 
-This contains everything you need to run your app locally.
+NeuralDeck is an AI agent workstation built with React, Vite, and Fastify. It combines a cyberpunk operator interface with local/remote model routing, multi-agent orchestration, and secure backend tooling.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ZLrjIhL_nC3HAAVHOWooLXbiQpJstjXn
+## Features
 
-## Run Locally
+- Neon Prime cockpit UI with animated, glassmorphic panels
+- Multi-agent workflows across analysis, design, implementation, QA, and security
+- OpenCode integration for strategic/specialized agent routing
+- Local LLM fallback routing for tactical tasks
+- File system, checkpoint, diff preview/apply, and workspace management APIs
 
-**Prerequisites:** # NeuralDeck v2.0 (Neon Prime)
+## Prerequisites
 
-> **"The Deck is your weapon. The Agents are your crew."**
+- Node.js 18+
+- npm 9+
+- Optional OpenCode Desktop app + CLI for OpenCode-routed agents
 
-NeuralDeck is a high-fidelity **AI Agent Workstation** built with React, Vite, and Fastify. It combines premium "Corporate Cyberpunk" aesthetics with powerful local LLM orchestration.
+## Quick Start
 
-## 🌟 Features
+1. Install dependencies:
 
-*   **Neon Prime UI:** A sleek, glassmorphic "Cockpit" interface with dynamic lighting and Framer Motion animations.
-*   **Neural Swarm:** Autonomous agent coordination via a state machine.
-*   **Local RAG:** In-memory vector store for context injection (`@xenova/transformers`).
-*   **The Construct:** File system management and code visualization.
-*   **CyberTerminal:** Integrated CLI for system commands and chat.
+```bash
+npm install
+```
 
-## 🚀 Quick Start
+2. Start backend:
 
-1.  **Start the Backend:**
-    ```bash
-    node server.cjs
-    ```
-2.  **Start the Frontend:**
-    ```bash
-    npm run dev
-    ```
-3.  **Access the Deck:**
-    Open `http://localhost:3002` (or the port shown in your terminal).
+```bash
+node server.cjs
+```
+
+3. Start frontend:
+
+```bash
+npm run dev
+```
+
+4. Open the app:
+
+- Frontend: `http://localhost:5173`
+- Backend health: `http://localhost:3001/health`
+
+## OpenCode Integration
+
+NeuralDeck supports a hybrid agent model:
+
+- OpenCode-routed agents (strategic/custom specialist roles)
+- Local-routed agents (fast tactical execution)
+
+Core config files:
+
+- `.neuraldeck/agent-mappings.json`
+- `.neuraldeck/routing-config.json`
+- `.neuraldeck/session-cache.json`
+
+Backend API routes:
+
+- `GET /api/opencode/health`
+- `GET /api/opencode/agents`
+- `GET /api/opencode/sessions`
+- `POST /api/opencode/prompt`
+- `POST /api/opencode/cache-session`
+
+See `docs/OPENCODE_INTEGRATION_GUIDE.md` for setup, routing behavior, and troubleshooting.
+
+## Testing
+
+Run core tests:
+
+```bash
+npm test
+```
+
+Run OpenCode route verification:
+
+```bash
+node scripts/test-backend-routes.cjs
+```
