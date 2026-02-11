@@ -1,7 +1,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 
 // --- DEFENSIVE MODULES (Safe Require) ---
 const safeRequire = (name) => {
@@ -48,9 +48,52 @@ const hiveMemory = require('./server/services/hiveMemory.cjs');
 
 // --- WORKSPACE SERVICE ---
 const { workspaceService, NEURALDECK_DIR } = require('./server/services/workspaceService.cjs');
+const opencodeCLI = require('./server/services/opencodeCLI.cjs');
+const providerAdapter = require('./server/services/providerAdapter.cjs');
 
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || '127.0.0.1';
 const WORKSPACE_PATH = process.cwd();
+
+const DEFAULT_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+];
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : DEFAULT_ALLOWED_ORIGINS;
+const SOCKET_CORS_ORIGINS = process.env.SOCKET_CORS_ORIGINS
+    ? process.env.SOCKET_CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : CORS_ORIGINS;
+
+const LLM_HOST_ALLOWLIST = process.env.LLM_HOST_ALLOWLIST
+    ? process.env.LLM_HOST_ALLOWLIST.split(',').map(h => h.trim()).filter(Boolean)
+    : ['localhost', '127.0.0.1', '::1', '192.168.100.190', 'generativelanguage.googleapis.com'];
+const LLM_ORIGIN_ALLOWLIST = process.env.LLM_ORIGIN_ALLOWLIST
+    ? process.env.LLM_ORIGIN_ALLOWLIST.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+
+const GEMINI_OPENAI_BASE_URL = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai';
+
+const isAllowedBaseUrl = (candidate) => {
+    try {
+        const parsed = new URL(candidate);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return false;
+        }
+
+        const origin = `${parsed.protocol}//${parsed.host}`;
+        if (LLM_ORIGIN_ALLOWLIST.includes(origin)) {
+            return true;
+        }
+
+        return LLM_HOST_ALLOWLIST.includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+};
 
 // --- JWT CONFIGURATION - Story 6-4 ---
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
@@ -62,19 +105,22 @@ const activeSessions = new Map();
 
 // --- COMMAND SECURITY - Story 1.2 ---
 
+const ALLOW_INTERPRETERS = process.env.ALLOW_INTERPRETERS === 'true';
+
 // Expanded whitelist of allowed base commands
 const ALLOWED_COMMANDS = [
     // File operations
     'ls', 'pwd', 'mkdir', 'touch', 'cat', 'grep', 'find', 'echo', 'head', 'tail', 'wc',
     // Git commands
     'git',
-    // NPM/Node commands
-    'npm', 'node', 'npx',
-    // Python (version checks only)
-    'python', 'python3',
+    // Local AI CLIs
+    'ollama', 'codex', 'openai', 'claude', 'gemini',
     // Build tools
     'tsc', 'vite', 'esbuild'
 ];
+if (ALLOW_INTERPRETERS) {
+    ALLOWED_COMMANDS.push('npm', 'node', 'npx', 'python', 'python3');
+}
 
 // Dangerous patterns that are ALWAYS blocked
 const DANGEROUS_PATTERNS = [
@@ -114,6 +160,178 @@ const EXEC_OPTIONS = {
     env: { ...process.env, PATH: EXTENDED_PATH }
 };
 
+// Basic shell-style arg parser (handles quotes and escapes)
+const parseCommandArgs = (command) => {
+    const args = [];
+    let current = '';
+    let inSingle = false;
+    let inDouble = false;
+    let escaped = false;
+
+    for (let i = 0; i < command.length; i++) {
+        const ch = command[i];
+
+        if (escaped) {
+            current += ch;
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\' && !inSingle) {
+            escaped = true;
+            continue;
+        }
+
+        if (ch === '\'' && !inDouble) {
+            inSingle = !inSingle;
+            continue;
+        }
+
+        if (ch === '"' && !inSingle) {
+            inDouble = !inDouble;
+            continue;
+        }
+
+        if (/\s/.test(ch) && !inSingle && !inDouble) {
+            if (current.length > 0) {
+                args.push(current);
+                current = '';
+            }
+            continue;
+        }
+
+        current += ch;
+    }
+
+    if (escaped || inSingle || inDouble) {
+        throw new Error('Unterminated quote or escape in command');
+    }
+
+    if (current.length > 0) {
+        args.push(current);
+    }
+
+    return args;
+};
+
+const extractPathsFromToken = (token) => {
+    const candidates = [];
+    if (token.startsWith('/')) {
+        candidates.push(token);
+    }
+    if (token.startsWith('~/')) {
+        candidates.push(path.join(USER_HOME, token.slice(2)));
+    }
+    const eqIndex = token.indexOf('=');
+    if (eqIndex !== -1) {
+        const value = token.slice(eqIndex + 1);
+        if (value.startsWith('/')) {
+            candidates.push(value);
+        } else if (value.startsWith('~/')) {
+            candidates.push(path.join(USER_HOME, value.slice(2)));
+        }
+    }
+    return candidates;
+};
+
+const runCommand = (command, options, timeoutMs) => {
+    return new Promise((resolve) => {
+        let args;
+        try {
+            args = parseCommandArgs(command);
+        } catch (err) {
+            return resolve({ error: err });
+        }
+
+        if (args.length === 0) {
+            return resolve({ error: new Error('Empty command') });
+        }
+
+        const [cmd, ...cmdArgs] = args;
+        const child = spawn(cmd, cmdArgs, { ...options, shell: false });
+        let stdout = '';
+        let stderr = '';
+        let timedOut = false;
+
+        const maxStdout = 5000;
+        const maxStderr = 1000;
+
+        const timeout = setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGTERM');
+        }, timeoutMs);
+
+        child.stdout.on('data', (chunk) => {
+            if (stdout.length < maxStdout) {
+                stdout += chunk.toString();
+            }
+        });
+        child.stderr.on('data', (chunk) => {
+            if (stderr.length < maxStderr) {
+                stderr += chunk.toString();
+            }
+        });
+
+        child.on('error', (error) => {
+            clearTimeout(timeout);
+            resolve({ error, stdout, stderr });
+        });
+
+        child.on('close', (code) => {
+            clearTimeout(timeout);
+            resolve({
+                stdout: stdout.length > maxStdout ? stdout.slice(0, maxStdout) + '\n... [truncated]' : stdout,
+                stderr: stderr.length > maxStderr ? stderr.slice(0, maxStderr) + '\n... [truncated]' : stderr,
+                exitCode: typeof code === 'number' ? code : 1,
+                timedOut
+            });
+        });
+    });
+};
+
+const runCommandArgs = (cmd, cmdArgs, options, timeoutMs) => {
+    return new Promise((resolve) => {
+        const child = spawn(cmd, cmdArgs, { ...options, shell: false });
+        let stdout = '';
+        let stderr = '';
+        let timedOut = false;
+
+        const maxStdout = 5000;
+        const maxStderr = 1000;
+
+        const timeout = setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGTERM');
+        }, timeoutMs);
+
+        child.stdout.on('data', (chunk) => {
+            if (stdout.length < maxStdout) {
+                stdout += chunk.toString();
+            }
+        });
+        child.stderr.on('data', (chunk) => {
+            if (stderr.length < maxStderr) {
+                stderr += chunk.toString();
+            }
+        });
+
+        child.on('error', (error) => {
+            clearTimeout(timeout);
+            resolve({ error, stdout, stderr });
+        });
+
+        child.on('close', (code) => {
+            clearTimeout(timeout);
+            resolve({
+                stdout: stdout.length > maxStdout ? stdout.slice(0, maxStdout) + '\n... [truncated]' : stdout,
+                stderr: stderr.length > maxStderr ? stderr.slice(0, maxStderr) + '\n... [truncated]' : stderr,
+                exitCode: typeof code === 'number' ? code : 1,
+                timedOut
+            });
+        });
+    });
+};
+
 // Validate command against whitelist and blacklist
 const validateCommand = (cmd, ip) => {
     // Type check - prevent object/array injection
@@ -135,6 +353,9 @@ const validateCommand = (cmd, ip) => {
 
     // Extract base command
     const baseCmd = cmd.trim().split(/\s+/)[0];
+    if (!baseCmd) {
+        return { valid: false, reason: 'Command is empty' };
+    }
 
     // Check whitelist
     if (!ALLOWED_COMMANDS.includes(baseCmd)) {
@@ -146,33 +367,36 @@ const validateCommand = (cmd, ip) => {
 
 // Validate file paths in command arguments
 const validateCommandPaths = (cmd, ip) => {
-    // Extract potential file paths from command
-    const pathPatterns = [
-        /(?:^|\s)(\.\.\/[^\s]*)/g, // ../path
-        /(?:^|\s)(\/[^\s]+)/g, // /absolute/path
-        /(?:^|\s)(~\/[^\s]*)/g, // ~/home path
-    ];
+    let tokens;
+    try {
+        tokens = parseCommandArgs(cmd);
+    } catch (err) {
+        return { valid: false, reason: err.message };
+    }
 
-    for (const pattern of pathPatterns) {
-        let match;
-        while ((match = pattern.exec(cmd)) !== null) {
-            const potentialPath = match[1];
+    for (const token of tokens) {
+        if (token.includes('..') && (token.includes('/') || token.includes('\\'))) {
+            return { valid: false, reason: `Path traversal blocked: ${token}` };
+        }
+        if (token.startsWith('~/')) {
+            return { valid: false, reason: `Home paths not allowed: ${token}` };
+        }
 
-            // Block obvious traversal patterns
-            if (potentialPath.includes('..')) {
-                return { valid: false, reason: `Path traversal blocked: ${potentialPath}` };
+        const candidates = extractPathsFromToken(token);
+        for (const candidate of candidates) {
+            if (candidate.includes('..')) {
+                return { valid: false, reason: `Path traversal blocked: ${candidate}` };
             }
-
-            // For absolute paths, verify they're within workspace
-            if (potentialPath.startsWith('/')) {
-                try {
-                    const resolved = path.resolve(potentialPath);
-                    if (!resolved.startsWith(WORKSPACE_PATH)) {
-                        return { valid: false, reason: `Path outside workspace: ${potentialPath}` };
-                    }
-                } catch (e) {
-                    return { valid: false, reason: `Invalid path: ${potentialPath}` };
+            try {
+                const resolved = path.resolve(candidate);
+                if (!resolved.startsWith(WORKSPACE_PATH)) {
+                    return { valid: false, reason: `Path outside workspace: ${candidate}` };
                 }
+                if (resolved.startsWith(NEURALDECK_DIR) || resolved === NEURALDECK_DIR) {
+                    return { valid: false, reason: `Access denied to app directory: ${candidate}` };
+                }
+            } catch (e) {
+                return { valid: false, reason: `Invalid path: ${candidate}` };
             }
         }
     }
@@ -252,14 +476,7 @@ async function start() {
 
     // 2. CORS - Story 1.1: Explicit origin whitelist
     if (cors) {
-        const allowedOrigins = process.env.CORS_ORIGINS
-            ? process.env.CORS_ORIGINS.split(',')
-            : [
-                'http://localhost:3000',
-                'http://localhost:5173',
-                'http://127.0.0.1:3000',
-                'http://127.0.0.1:5173'
-            ];
+        const allowedOrigins = CORS_ORIGINS;
 
         await fastify.register(cors, {
             origin: (origin, callback) => {
@@ -278,6 +495,7 @@ async function start() {
                 return callback(new Error('Not allowed by CORS'), false);
             },
             methods: ['GET', 'POST', 'PUT', 'DELETE'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
             credentials: true
         });
         fastify.log.info(`[SECURITY] CORS configured for origins: ${allowedOrigins.join(', ')}`);
@@ -375,26 +593,6 @@ async function start() {
         } catch (err) {
             await securityLogger.logAuthAttempt(null, request.ip, false, err.message);
             reply.code(401).send({ error: 'Invalid or expired token' });
-        }
-    };
-
-    // Optional authentication (doesn't fail if no token)
-    const optionalAuth = async (request, reply) => {
-        try {
-            const authHeader = request.headers.authorization;
-            if (authHeader && authHeader.startsWith('Bearer ')) {
-                const token = authHeader.substring(7);
-                const decoded = jwt.verify(token, JWT_SECRET);
-                const session = activeSessions.get(decoded.sessionId);
-                if (session && !session.invalidated) {
-                    request.user = {
-                        userId: decoded.userId,
-                        sessionId: decoded.sessionId,
-                    };
-                }
-            }
-        } catch (err) {
-            // Silent fail for optional auth
         }
     };
 
@@ -617,8 +815,128 @@ async function start() {
         };
     });
 
+    // OpenCode: Health and status
+    fastify.get('/api/opencode/health', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const health = await opencodeCLI.healthCheck();
+            return {
+                success: true,
+                ...health
+            };
+        } catch (error) {
+            fastify.log.error(`[OPENCODE] Health check failed: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // OpenCode: Agent mappings and routing metadata
+    fastify.get('/api/opencode/agents', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const mappingsFile = path.join(process.cwd(), '.neuraldeck', 'agent-mappings.json');
+            const raw = await fs.readFile(mappingsFile, 'utf-8');
+            const parsed = JSON.parse(raw);
+            return {
+                success: true,
+                mappings: parsed.mappings || {},
+                stats: parsed.stats || null,
+                version: parsed.version || null
+            };
+        } catch (error) {
+            fastify.log.error(`[OPENCODE] Failed to load agent mappings: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // OpenCode: Session list and local cache
+    fastify.get('/api/opencode/sessions', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const [sessions, cacheRaw] = await Promise.all([
+                opencodeCLI.listSessions(),
+                fs.readFile(path.join(process.cwd(), '.neuraldeck', 'session-cache.json'), 'utf-8').catch(() => null)
+            ]);
+
+            return {
+                success: true,
+                sessions,
+                cache: cacheRaw ? JSON.parse(cacheRaw) : { version: '1.0.0', sessions: {} }
+            };
+        } catch (error) {
+            fastify.log.error(`[OPENCODE] Failed to list sessions: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // OpenCode: Prompt routing endpoint
+    fastify.post('/api/opencode/prompt', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const { agentId, prompt, options } = request.body || {};
+
+            if (!agentId || !prompt) {
+                return reply.code(400).send({
+                    success: false,
+                    error: 'agentId and prompt are required'
+                });
+            }
+
+            const result = await providerAdapter.routeToAgent(prompt, agentId, options || {});
+            return {
+                success: true,
+                result
+            };
+        } catch (error) {
+            fastify.log.error(`[OPENCODE] Prompt routing failed: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // OpenCode: Cache session for a specific NeuralDeck agent
+    fastify.post('/api/opencode/cache-session', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const { agentId, sessionId } = request.body || {};
+
+            if (!agentId || !sessionId) {
+                return reply.code(400).send({
+                    success: false,
+                    error: 'agentId and sessionId are required'
+                });
+            }
+
+            const saved = opencodeCLI.cacheSessionId(agentId, sessionId);
+            if (!saved) {
+                return reply.code(500).send({
+                    success: false,
+                    error: 'Failed to save session cache'
+                });
+            }
+
+            return {
+                success: true,
+                agentId,
+                sessionId
+            };
+        } catch (error) {
+            fastify.log.error(`[OPENCODE] Cache session failed: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
     // File System: List
-    fastify.get('/api/files', async (request, reply) => {
+    fastify.get('/api/files', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { workspaceId } = request.query;
             let workspacePath = WORKSPACE_PATH;
@@ -649,7 +967,7 @@ async function start() {
     // --- WORKSPACE MANAGEMENT ENDPOINTS ---
 
     // Get all workspaces and active workspace
-    fastify.get('/api/workspaces', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/workspaces', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const workspaces = await workspaceService.getRecentWorkspaces();
             const active = await workspaceService.getActiveWorkspace();
@@ -661,7 +979,7 @@ async function start() {
     });
 
     // Add new workspace
-    fastify.post('/api/workspaces', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/workspaces', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: workspacePath, name } = request.body;
             
@@ -685,7 +1003,7 @@ async function start() {
     });
 
     // Activate a workspace
-    fastify.post('/api/workspaces/:id/activate', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/workspaces/:id/activate', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { id } = request.params;
             const workspace = await workspaceService.setActiveWorkspace(id);
@@ -704,7 +1022,7 @@ async function start() {
     });
 
     // Remove workspace from list
-    fastify.delete('/api/workspaces/:id', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.delete('/api/workspaces/:id', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { id } = request.params;
             await workspaceService.removeWorkspace(id);
@@ -723,7 +1041,7 @@ async function start() {
     });
 
     // Validate workspace path
-    fastify.post('/api/workspaces/validate', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/workspaces/validate', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: workspacePath } = request.body;
             
@@ -740,7 +1058,7 @@ async function start() {
     });
 
     // Browse directory for folder picker
-    fastify.get('/api/browse', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/browse', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: dirPath } = request.query;
             
@@ -763,7 +1081,7 @@ async function start() {
     // --- END WORKSPACE MANAGEMENT ENDPOINTS ---
 
     // --- REASONING SERVICE - Story 7-1 ---
-    fastify.post('/api/think', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/think', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { prompt } = request.body;
             if (!prompt) {
@@ -781,18 +1099,18 @@ async function start() {
     });
 
     // --- HIVE MEMORY - Story 7-3 ---
-    fastify.get('/api/hive', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/hive', { preHandler: verifyToken }, async (request, reply) => {
         return { memories: hiveMemory.getAllMemories() };
     });
 
-    fastify.post('/api/hive/learn', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/hive/learn', { preHandler: verifyToken }, async (request, reply) => {
         const { key, value } = request.body;
         hiveMemory.learn(key, value, request.user?.userId || 'api');
         return { success: true };
     });
 
     // File System: Read
-    fastify.post('/api/read', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/read', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { filePath, workspaceId } = request.body;
             const cleanPath = safePath(filePath, workspaceId);
@@ -817,7 +1135,7 @@ async function start() {
     });
 
     // File System: Write (with automatic checkpointing - Story 6-8)
-    fastify.post('/api/write', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/write', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { filePath, content, agentId, skipCheckpoint, workspaceId } = request.body;
             const cleanPath = safePath(filePath, workspaceId);
@@ -875,7 +1193,7 @@ async function start() {
     // --- FILE CRUD OPERATIONS (Workspace-aware) ---
 
     // Create a new file or directory
-    fastify.post('/api/files/create', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/files/create', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: itemPath, type, workspaceId } = request.body;
             
@@ -918,7 +1236,7 @@ async function start() {
     });
 
     // Rename/move a file or directory
-    fastify.post('/api/files/rename', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/files/rename', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { oldPath, newPath, workspaceId } = request.body;
             
@@ -961,7 +1279,7 @@ async function start() {
     });
 
     // Delete a file or directory
-    fastify.delete('/api/files', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.delete('/api/files', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: itemPath, workspaceId } = request.body;
             
@@ -997,7 +1315,7 @@ async function start() {
     // --- END FILE CRUD OPERATIONS ---
 
     // File System: Check if file exists - Story 10 (R-007)
-    fastify.get('/api/files/check', async (request, reply) => {
+    fastify.get('/api/files/check', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: filePath } = request.query;
             if (!filePath) {
@@ -1016,7 +1334,7 @@ async function start() {
     });
 
     // File System: Create backup - Story 10 (R-007)
-    fastify.post('/api/files/backup', async (request, reply) => {
+    fastify.post('/api/files/backup', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: filePath } = request.body;
             if (!filePath) {
@@ -1056,7 +1374,7 @@ async function start() {
     });
 
     // File System: Save with versioning - Story 10 (R-007)
-    fastify.post('/api/files/save', async (request, reply) => {
+    fastify.post('/api/files/save', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: filePath, content, mode = 'versioned' } = request.body;
 
@@ -1132,7 +1450,7 @@ async function start() {
     let diffIdCounter = 1;
 
     // Diff: Preview changes before applying
-    fastify.post('/api/diff/preview', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/diff/preview', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: filePath, proposedContent, agentId, reason } = request.body;
 
@@ -1206,7 +1524,7 @@ async function start() {
     });
 
     // Diff: Apply approved changes
-    fastify.post('/api/diff/apply', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/diff/apply', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { diffId } = request.body;
 
@@ -1282,7 +1600,7 @@ async function start() {
     });
 
     // Diff: Reject changes
-    fastify.post('/api/diff/reject', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/diff/reject', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { diffId, reason } = request.body;
 
@@ -1331,7 +1649,7 @@ async function start() {
     });
 
     // Diff: Get pending diffs list
-    fastify.get('/api/diff/pending', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/diff/pending', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const pending = [];
             for (const [id, diff] of pendingDiffs.entries()) {
@@ -1354,7 +1672,7 @@ async function start() {
     });
 
     // Diff: Get specific diff by ID
-    fastify.get('/api/diff/:diffId', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/diff/:diffId', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { diffId } = request.params;
             const diff = pendingDiffs.get(diffId);
@@ -1388,7 +1706,7 @@ async function start() {
     const checkpointService = getCheckpointService(WORKSPACE_PATH);
 
     // Checkpoint: Get checkpoints for a file
-    fastify.get('/api/checkpoints', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/checkpoints', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { filePath } = request.query;
 
@@ -1407,7 +1725,7 @@ async function start() {
     });
 
     // Checkpoint: Get checkpoint content
-    fastify.get('/api/checkpoints/:checkpointId/content', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/checkpoints/:checkpointId/content', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { checkpointId } = request.params;
             const content = await checkpointService.getCheckpointContent(checkpointId);
@@ -1423,7 +1741,7 @@ async function start() {
     });
 
     // Checkpoint: Restore a checkpoint
-    fastify.post('/api/checkpoints/:checkpointId/restore', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/checkpoints/:checkpointId/restore', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { checkpointId } = request.params;
             const result = await checkpointService.restoreCheckpoint(checkpointId);
@@ -1450,7 +1768,7 @@ async function start() {
     });
 
     // Checkpoint: Delete a checkpoint
-    fastify.delete('/api/checkpoints/:checkpointId', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.delete('/api/checkpoints/:checkpointId', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { checkpointId } = request.params;
             const result = await checkpointService.deleteCheckpoint(checkpointId);
@@ -1468,7 +1786,7 @@ async function start() {
     });
 
     // Checkpoint: Get storage stats
-    fastify.get('/api/checkpoints/stats', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/checkpoints/stats', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const stats = await checkpointService.getStats();
             return stats;
@@ -1479,7 +1797,7 @@ async function start() {
     });
 
     // Checkpoint: Get all files with checkpoints
-    fastify.get('/api/checkpoints/files', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.get('/api/checkpoints/files', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const files = await checkpointService.getFilesWithCheckpoints();
             return { files };
@@ -1490,7 +1808,7 @@ async function start() {
     });
 
     // Checkpoint: Manual cleanup
-    fastify.post('/api/checkpoints/cleanup', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/checkpoints/cleanup', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const result = await checkpointService.cleanup();
             fastify.log.info(`[CHECKPOINT] Manual cleanup: ${result.deletedCount} removed`);
@@ -1502,7 +1820,7 @@ async function start() {
     });
 
     // Checkpoint: Create manual checkpoint
-    fastify.post('/api/checkpoints', { preHandler: optionalAuth }, async (request, reply) => {
+    fastify.post('/api/checkpoints', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { filePath, summary } = request.body;
 
@@ -1539,22 +1857,28 @@ async function start() {
         'cli': null, // User-defined, validated separately
         'claude-cli': ['claude'],
         'gemini-cli': ['gemini'],
+        'codex-cli': ['codex'],
+        'ollama-cli': ['ollama'],
         'copilot-cli': ['gh'],
         'cursor-cli': ['cursor']
     };
 
     // Unified LLM Gateway
-    fastify.post('/api/chat', async (request, reply) => {
+    fastify.post('/api/chat', { preHandler: verifyToken }, async (request, reply) => {
         const { messages, config } = request.body;
         const { provider, baseUrl, apiKey, model, temperature, cliCommand } = config || {};
 
         // --- CLI PROVIDER HANDLING ---
-        const cliProviders = ['cli', 'claude-cli', 'gemini-cli', 'copilot-cli', 'cursor-cli'];
+        const cliProviders = ['cli', 'claude-cli', 'gemini-cli', 'codex-cli', 'ollama-cli', 'copilot-cli', 'cursor-cli'];
         if (cliProviders.includes(provider)) {
             fastify.log.info(`[GATEWAY] CLI Provider: ${provider}`);
 
             if (!cliCommand) {
                 reply.code(400).send({ error: 'CLI command template required for CLI providers' });
+                return;
+            }
+            if (typeof cliCommand !== 'string') {
+                reply.code(400).send({ error: 'CLI command template must be a string' });
                 return;
             }
 
@@ -1581,58 +1905,89 @@ async function start() {
                 return;
             }
 
-            // Replace template placeholder with escaped prompt
-            const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-            const finalCommand = cliCommand.replace('{{prompt}}', escapedPrompt);
+            let tokens;
+            try {
+                tokens = parseCommandArgs(cliCommand);
+            } catch (err) {
+                reply.code(400).send({ error: err.message });
+                return;
+            }
 
-            fastify.log.info(`[GATEWAY] Executing CLI: ${finalCommand.substring(0, 100)}...`);
+            if (!tokens.length) {
+                reply.code(400).send({ error: 'CLI command template is empty' });
+                return;
+            }
 
-            return new Promise((resolve) => {
-                const startTime = Date.now();
-                exec(finalCommand, { ...EXEC_OPTIONS, timeout: 120000 }, (error, stdout, stderr) => {
-                    const duration = Date.now() - startTime;
-
-                    if (error) {
-                        fastify.log.error(`[GATEWAY] CLI error: ${error.message}`);
-                        resolve({
-                            choices: [{
-                                message: {
-                                    role: 'assistant',
-                                    content: `CLI Error: ${stderr || error.message}`
-                                }
-                            }],
-                            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-                            model: provider,
-                            cli_duration: duration
-                        });
-                        return;
-                    }
-
-                    fastify.log.info(`[GATEWAY] CLI success in ${duration}ms`);
-                    resolve({
-                        choices: [{
-                            message: {
-                                role: 'assistant',
-                                content: stdout.trim()
-                            }
-                        }],
-                        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-                        model: provider,
-                        cli_duration: duration
-                    });
-                });
+            let replaced = false;
+            const resolvedTokens = tokens.map(token => {
+                if (token.includes('{{prompt}}')) {
+                    replaced = true;
+                    return token.replace('{{prompt}}', prompt);
+                }
+                return token;
             });
+
+            if (!replaced) {
+                reply.code(400).send({ error: 'CLI command template must include {{prompt}}' });
+                return;
+            }
+
+            const [finalCmd, ...finalArgs] = resolvedTokens;
+
+            fastify.log.info(`[GATEWAY] Executing CLI: ${finalCmd} ...`);
+
+            const startTime = Date.now();
+            const result = await runCommandArgs(finalCmd, finalArgs, EXEC_OPTIONS, 120000);
+            const duration = Date.now() - startTime;
+
+            if (result.error || result.exitCode !== 0 || result.timedOut) {
+                const message = result.timedOut
+                    ? 'CLI Error: Command timed out'
+                    : `CLI Error: ${result.stderr || result.error?.message || 'Unknown error'}`;
+                fastify.log.error(`[GATEWAY] CLI error: ${message}`);
+                return {
+                    choices: [{
+                        message: {
+                            role: 'assistant',
+                            content: message
+                        }
+                    }],
+                    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+                    model: provider,
+                    cli_duration: duration
+                };
+            }
+
+            fastify.log.info(`[GATEWAY] CLI success in ${duration}ms`);
+            return {
+                choices: [{
+                    message: {
+                        role: 'assistant',
+                        content: result.stdout.trim()
+                    }
+                }],
+                usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+                model: provider,
+                cli_duration: duration
+            };
         }
 
         // --- HTTP API PROVIDER HANDLING ---
         // Determine target URL based on provider
         let targetUrl;
         if (baseUrl) {
+            if (!isAllowedBaseUrl(baseUrl)) {
+                fastify.log.warn(`[GATEWAY] Base URL blocked by allowlist: ${baseUrl}`);
+                reply.code(400).send({ error: 'Base URL not allowed' });
+                return;
+            }
             // Normalize URL: ensure /v1 suffix for OpenAI-compatible APIs
             targetUrl = baseUrl.replace(/\/+$/, ''); // Remove trailing slashes
-            if (!targetUrl.endsWith('/v1')) {
+            if (!/\/openai(\/|$)/i.test(targetUrl) && !targetUrl.endsWith('/v1')) {
                 targetUrl += '/v1';
             }
+        } else if (provider === 'gemini') {
+            targetUrl = GEMINI_OPENAI_BASE_URL;
         } else if (provider === 'openai') {
             targetUrl = 'https://api.openai.com/v1';
         } else if (provider === 'lmstudio') {
@@ -1641,7 +1996,10 @@ async function start() {
             targetUrl = 'http://localhost:8000/v1';
         }
 
-        const targetKey = apiKey || process.env.OPENAI_API_KEY || 'lm-studio';
+        const targetKey = apiKey
+            || (provider === 'gemini' ? (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) : null)
+            || process.env.OPENAI_API_KEY
+            || 'lm-studio';
         const targetModel = (model || 'openai/gpt-oss-20b').trim(); // Sanitize model name
 
         fastify.log.info(`[GATEWAY] Proxying to ${targetUrl} [Model: ${targetModel}]`);
@@ -1679,7 +2037,7 @@ async function start() {
     });
 
     // Tool Execution (Safe Shell) - Story 1.2: Enhanced Security
-    fastify.post('/api/mcp/call', async (request, reply) => {
+    fastify.post('/api/mcp/call', { preHandler: verifyToken }, async (request, reply) => {
         const { tool, args } = request.body;
         const clientIp = request.ip;
 
@@ -1704,37 +2062,25 @@ async function start() {
             const startTime = Date.now();
             fastify.log.info(`[COMMAND] Executing: ${cmd} from ${clientIp}`);
 
-            return new Promise((resolve) => {
-                exec(cmd, EXEC_OPTIONS, (error, stdout, stderr) => {
-                    const executionTime = Date.now() - startTime;
-                    const exitCode = error ? (error.code || 1) : 0;
+            const result = await runCommand(cmd, EXEC_OPTIONS, COMMAND_TIMEOUT);
+            const executionTime = Date.now() - startTime;
+            const exitCode = typeof result.exitCode === 'number' ? result.exitCode : 1;
 
-                    // Truncate output with indicators
-                    const maxStdout = 5000;
-                    const maxStderr = 1000;
-                    const truncatedStdout = stdout.length > maxStdout
-                        ? stdout.substring(0, maxStdout) + '\n... [truncated]'
-                        : stdout;
-                    const truncatedStderr = stderr.length > maxStderr
-                        ? stderr.substring(0, maxStderr) + '\n... [truncated]'
-                        : stderr;
+            if (exitCode === 0 && !result.timedOut) {
+                fastify.log.info(`[COMMAND] Success: ${cmd} from ${clientIp} - exit:${exitCode} time:${executionTime}ms`);
+            } else {
+                fastify.log.warn(`[COMMAND] Failed: ${cmd} from ${clientIp} - exit:${exitCode} time:${executionTime}ms error:${result.error?.message || 'unknown'}`);
+            }
 
-                    if (exitCode === 0) {
-                        fastify.log.info(`[COMMAND] Success: ${cmd} from ${clientIp} - exit:${exitCode} time:${executionTime}ms`);
-                    } else {
-                        fastify.log.warn(`[COMMAND] Failed: ${cmd} from ${clientIp} - exit:${exitCode} time:${executionTime}ms error:${error?.message || 'unknown'}`);
-                    }
-
-                    resolve({
-                        result: JSON.stringify({
-                            stdout: truncatedStdout,
-                            stderr: truncatedStderr,
-                            exitCode: exitCode,
-                            executionTime: executionTime
-                        })
-                    });
-                });
-            });
+            return {
+                result: JSON.stringify({
+                    stdout: result.stdout || '',
+                    stderr: result.stderr || '',
+                    exitCode: exitCode,
+                    executionTime: executionTime,
+                    timedOut: !!result.timedOut
+                })
+            };
         }
 
         // Git Log Tool - Story 1.2: Validated
@@ -1785,7 +2131,7 @@ async function start() {
     };
 
     // Dockerfile Generation Endpoint
-    fastify.post('/api/docker/generate', async (request, reply) => {
+    fastify.post('/api/docker/generate', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { projectType, outputPath, dependencies = {}, buildCommand, port, envVars = {} } = request.body;
 
@@ -1839,7 +2185,7 @@ async function start() {
     });
 
     // Dockerfile Validation Endpoint
-    fastify.post('/api/docker/validate', async (request, reply) => {
+    fastify.post('/api/docker/validate', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { dockerfilePath, imageName, cleanup = true } = request.body;
 
@@ -1967,7 +2313,7 @@ async function start() {
     }
 
     // --- FILE LOCK API ENDPOINTS - Story 1.3 ---
-    fastify.post('/api/files/lock', async (request, reply) => {
+    fastify.post('/api/files/lock', { preHandler: verifyToken }, async (request, reply) => {
         const { filePath, agentId } = request.body;
 
         if (!filePath || !agentId) {
@@ -1985,7 +2331,7 @@ async function start() {
         return result;
     });
 
-    fastify.post('/api/files/unlock', async (request, reply) => {
+    fastify.post('/api/files/unlock', { preHandler: verifyToken }, async (request, reply) => {
         const { filePath, agentId } = request.body;
 
         if (!filePath || !agentId) {
@@ -2003,7 +2349,7 @@ async function start() {
         return result;
     });
 
-    fastify.get('/api/files/locks', async (request, reply) => {
+    fastify.get('/api/files/locks', { preHandler: verifyToken }, async (request, reply) => {
         const watcher = getFileWatcher();
         if (!watcher) {
             reply.code(503).send({ error: 'File watcher service not available' });
@@ -2013,7 +2359,7 @@ async function start() {
         return { locks: watcher.getAllLocks() };
     });
 
-    fastify.get('/api/files/lock/:filePath', async (request, reply) => {
+    fastify.get('/api/files/lock/:filePath', { preHandler: verifyToken }, async (request, reply) => {
         const { filePath } = request.params;
 
         const watcher = getFileWatcher();
@@ -2028,7 +2374,7 @@ async function start() {
 
     // --- STORY DETECTION API - Story 4-1 ---
     // Endpoint to list stories with metadata
-    fastify.get('/api/stories', async (request, reply) => {
+    fastify.get('/api/stories', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const storiesDir = path.join(WORKSPACE_PATH, 'stories');
 
@@ -2173,7 +2519,7 @@ async function start() {
     const activeSwarmExecutions = new Map();
 
     // Start a swarm execution
-    fastify.post('/api/swarm/execute', async (request, reply) => {
+    fastify.post('/api/swarm/execute', { preHandler: verifyToken }, async (request, reply) => {
         const { storyIds, llmConfig, config } = request.body;
 
         if (!storyIds || !Array.isArray(storyIds) || storyIds.length === 0) {
@@ -2364,7 +2710,7 @@ async function start() {
     });
 
     // Get swarm execution status
-    fastify.get('/api/swarm/status/:executionId', async (request, reply) => {
+    fastify.get('/api/swarm/status/:executionId', { preHandler: verifyToken }, async (request, reply) => {
         const { executionId } = request.params;
         const execution = activeSwarmExecutions.get(executionId);
 
@@ -2377,7 +2723,7 @@ async function start() {
     });
 
     // List all active swarm executions
-    fastify.get('/api/swarm/executions', async (request, reply) => {
+    fastify.get('/api/swarm/executions', { preHandler: verifyToken }, async (request, reply) => {
         const executions = Array.from(activeSwarmExecutions.values()).map(exec => ({
             id: exec.id,
             status: exec.status,
@@ -2391,7 +2737,7 @@ async function start() {
     });
 
     // Cancel a swarm execution
-    fastify.post('/api/swarm/cancel/:executionId', async (request, reply) => {
+    fastify.post('/api/swarm/cancel/:executionId', { preHandler: verifyToken }, async (request, reply) => {
         const { executionId } = request.params;
         const execution = activeSwarmExecutions.get(executionId);
 
@@ -2431,7 +2777,7 @@ async function start() {
     }
 
     // Detect and register a conflict
-    fastify.post('/api/conflicts/detect', async (request, reply) => {
+    fastify.post('/api/conflicts/detect', { preHandler: verifyToken }, async (request, reply) => {
         const { filePath, developerA, developerB } = request.body;
 
         if (!filePath || !developerA || !developerB) {
@@ -2480,7 +2826,7 @@ async function start() {
     });
 
     // List all conflicts
-    fastify.get('/api/conflicts', async (request, reply) => {
+    fastify.get('/api/conflicts', { preHandler: verifyToken }, async (request, reply) => {
         const conflicts = Array.from(activeConflicts.values()).map(c => ({
             id: c.id,
             filePath: c.filePath,
@@ -2495,7 +2841,7 @@ async function start() {
     });
 
     // Get conflict details
-    fastify.get('/api/conflicts/:conflictId', async (request, reply) => {
+    fastify.get('/api/conflicts/:conflictId', { preHandler: verifyToken }, async (request, reply) => {
         const { conflictId } = request.params;
         const conflict = activeConflicts.get(conflictId);
 
@@ -2508,7 +2854,7 @@ async function start() {
     });
 
     // Attempt automatic resolution
-    fastify.post('/api/conflicts/:conflictId/auto', async (request, reply) => {
+    fastify.post('/api/conflicts/:conflictId/auto', { preHandler: verifyToken }, async (request, reply) => {
         const { conflictId } = request.params;
         const { llmConfig } = request.body;
         const conflict = activeConflicts.get(conflictId);
@@ -2629,7 +2975,7 @@ ${contentB}
     });
 
     // Manual resolution
-    fastify.post('/api/conflicts/:conflictId/resolve', async (request, reply) => {
+    fastify.post('/api/conflicts/:conflictId/resolve', { preHandler: verifyToken }, async (request, reply) => {
         const { conflictId } = request.params;
         const { resolvedContent, resolvedBy } = request.body;
         const conflict = activeConflicts.get(conflictId);
@@ -2686,7 +3032,7 @@ ${contentB}
     });
 
     // Get conflict statistics
-    fastify.get('/api/conflicts/stats', async (request, reply) => {
+    fastify.get('/api/conflicts/stats', { preHandler: verifyToken }, async (request, reply) => {
         const conflicts = Array.from(activeConflicts.values());
 
         const stats = {
@@ -2711,7 +3057,7 @@ ${contentB}
     });
 
     // Clear resolved conflicts
-    fastify.delete('/api/conflicts/resolved', async (request, reply) => {
+    fastify.delete('/api/conflicts/resolved', { preHandler: verifyToken }, async (request, reply) => {
         let cleared = 0;
         for (const [id, conflict] of activeConflicts) {
             if (conflict.status === 'resolved') {
@@ -2760,7 +3106,7 @@ ${contentB}
     };
 
     // Initiate a security scan
-    fastify.post('/api/security/scan', async (request, reply) => {
+    fastify.post('/api/security/scan', { preHandler: verifyToken }, async (request, reply) => {
         const { targetPaths, agents, llmConfig } = request.body;
 
         if (!targetPaths || !Array.isArray(targetPaths) || targetPaths.length === 0) {
@@ -2860,7 +3206,7 @@ ${contentB}
     }
 
     // Get scan status
-    fastify.get('/api/security/scan/:scanId', async (request, reply) => {
+    fastify.get('/api/security/scan/:scanId', { preHandler: verifyToken }, async (request, reply) => {
         const { scanId } = request.params;
         const scan = activeSecurityScans.get(scanId);
 
@@ -2873,7 +3219,7 @@ ${contentB}
     });
 
     // List all scans
-    fastify.get('/api/security/scans', async (request, reply) => {
+    fastify.get('/api/security/scans', { preHandler: verifyToken }, async (request, reply) => {
         const scans = Array.from(activeSecurityScans.values()).map(s => ({
             id: s.id,
             status: s.status,
@@ -2888,7 +3234,7 @@ ${contentB}
     });
 
     // Get findings for a scan
-    fastify.get('/api/security/findings/:scanId', async (request, reply) => {
+    fastify.get('/api/security/findings/:scanId', { preHandler: verifyToken }, async (request, reply) => {
         const { scanId } = request.params;
         const { severity, type } = request.query;
         const scan = activeSecurityScans.get(scanId);
@@ -2919,7 +3265,7 @@ ${contentB}
     });
 
     // Add finding to a scan (called by frontend security analyzer)
-    fastify.post('/api/security/findings/:scanId', async (request, reply) => {
+    fastify.post('/api/security/findings/:scanId', { preHandler: verifyToken }, async (request, reply) => {
         const { scanId } = request.params;
         const finding = request.body;
         const scan = activeSecurityScans.get(scanId);
@@ -2968,7 +3314,7 @@ ${contentB}
     });
 
     // Update finding status
-    fastify.put('/api/security/findings/:scanId/:findingId', async (request, reply) => {
+    fastify.put('/api/security/findings/:scanId/:findingId', { preHandler: verifyToken }, async (request, reply) => {
         const { scanId, findingId } = request.params;
         const { status, notes } = request.body;
         const scan = activeSecurityScans.get(scanId);
@@ -3008,7 +3354,7 @@ ${contentB}
     });
 
     // Complete a scan
-    fastify.post('/api/security/scan/:scanId/complete', async (request, reply) => {
+    fastify.post('/api/security/scan/:scanId/complete', { preHandler: verifyToken }, async (request, reply) => {
         const { scanId } = request.params;
         const scan = activeSecurityScans.get(scanId);
 
@@ -3055,7 +3401,7 @@ ${contentB}
     });
 
     // Generate security report
-    fastify.get('/api/security/report/:scanId', async (request, reply) => {
+    fastify.get('/api/security/report/:scanId', { preHandler: verifyToken }, async (request, reply) => {
         const { scanId } = request.params;
         const scan = activeSecurityScans.get(scanId);
 
@@ -3109,7 +3455,7 @@ ${contentB}
     });
 
     // Cancel a running scan
-    fastify.post('/api/security/scan/:scanId/cancel', async (request, reply) => {
+    fastify.post('/api/security/scan/:scanId/cancel', { preHandler: verifyToken }, async (request, reply) => {
         const { scanId } = request.params;
         const scan = activeSecurityScans.get(scanId);
 
@@ -3139,7 +3485,7 @@ ${contentB}
     });
 
     // Clear completed scans
-    fastify.delete('/api/security/scans/completed', async (request, reply) => {
+    fastify.delete('/api/security/scans/completed', { preHandler: verifyToken }, async (request, reply) => {
         let cleared = 0;
         for (const [id, scan] of activeSecurityScans) {
             if (scan.status === 'completed' || scan.status === 'cancelled') {
@@ -3154,7 +3500,7 @@ ${contentB}
     });
 
     // Get vulnerability metadata
-    fastify.get('/api/security/vulnerability-types', async (request, reply) => {
+    fastify.get('/api/security/vulnerability-types', { preHandler: verifyToken }, async (request, reply) => {
         return { types: VULNERABILITY_INFO };
     });
 
@@ -3178,7 +3524,7 @@ ${contentB}
     }
 
     // Task 4.1: GET /api/rag/search - Semantic code search
-    fastify.get('/api/rag/search', async (request, reply) => {
+    fastify.get('/api/rag/search', { preHandler: verifyToken }, async (request, reply) => {
         // Task 4.5: Request validation
         const { q, k } = request.query;
 
@@ -3266,7 +3612,7 @@ ${contentB}
     });
 
     // Task 4.3: GET /api/rag/stats - Get RAG index statistics
-    fastify.get('/api/rag/stats', async (request, reply) => {
+    fastify.get('/api/rag/stats', { preHandler: verifyToken }, async (request, reply) => {
         if (!ragService) {
             reply.code(503).send({
                 error: 'RAG service not available',
@@ -3319,7 +3665,7 @@ ${contentB}
     });
 
     // Task 4.4: POST /api/rag/reindex - Trigger full reindex
-    fastify.post('/api/rag/reindex', async (request, reply) => {
+    fastify.post('/api/rag/reindex', { preHandler: verifyToken }, async (request, reply) => {
         if (!codebaseIndexer) {
             reply.code(503).send({
                 error: 'Codebase indexer not available',
@@ -3382,7 +3728,7 @@ ${contentB}
     });
 
     // GET /api/rag/config - Get RAG configuration
-    fastify.get('/api/rag/config', async (request, reply) => {
+    fastify.get('/api/rag/config', { preHandler: verifyToken }, async (request, reply) => {
         if (!ragService) {
             reply.code(503).send({
                 error: 'RAG service not available',
@@ -3403,7 +3749,7 @@ ${contentB}
     });
 
     // POST /api/rag/clear - Clear all indexed content
-    fastify.post('/api/rag/clear', async (request, reply) => {
+    fastify.post('/api/rag/clear', { preHandler: verifyToken }, async (request, reply) => {
         if (!ragService) {
             reply.code(503).send({
                 error: 'RAG service not available',
@@ -3449,6 +3795,7 @@ ${contentB}
             jwt,
             activeSessions,
             securityLogger,
+            corsOrigins: SOCKET_CORS_ORIGINS,
         });
 
         fastify.log.info('[SOCKET] Socket.IO initialized with JWT authentication');
@@ -3458,8 +3805,8 @@ ${contentB}
     }
 
     try {
-        await fastify.listen({ port: PORT, host: '0.0.0.0' });
-        console.log(`NEURAL DECK CORE ONLINE: http://localhost:${PORT}`);
+        await fastify.listen({ port: PORT, host: HOST });
+        console.log(`NEURAL DECK CORE ONLINE: http://${HOST}:${PORT}`);
 
         // Log JWT secret info (for development only)
         if (process.env.NODE_ENV !== 'production') {
