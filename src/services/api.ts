@@ -1,29 +1,25 @@
 
 import { ChatMessage, FileNode, LlmConfig } from '../types';
-import { authFetch, authService } from './auth';
+import { authFetch } from './auth';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
 
-// Helper to make requests with optional auth
-async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  // Use auth service if available, otherwise fallback to regular fetch
-  if (authService.isAuthenticated()) {
-    return authFetch(url, options);
-  }
-  return fetch(url, options);
+// Helper to make requests with auth
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  return authFetch(url, options);
 }
 
 // --- MCP METHODS ---
 export const getMCPTools = async () => {
   try {
-    const res = await fetch(`${API_BASE}/mcp/tools`);
+    const res = await apiFetch(`${API_BASE}/mcp/tools`);
     return await res.json();
   } catch { return { tools: [] }; }
 };
 
 export const callMCPTool = async (tool: string, args: any) => {
   try {
-    const res = await fetch(`${API_BASE}/mcp/call`, {
+    const res = await apiFetch(`${API_BASE}/mcp/call`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tool, args }),
@@ -33,7 +29,7 @@ export const callMCPTool = async (tool: string, args: any) => {
 };
 
 export const ingestContext = async (content: string) => {
-  await fetch(`${API_BASE}/context/ingest`, {
+  await apiFetch(`${API_BASE}/context/ingest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -42,7 +38,7 @@ export const ingestContext = async (content: string) => {
 
 export const getKeyStatus = async () => {
   try {
-    const res = await fetch(`${API_BASE}/status/keys`);
+    const res = await apiFetch(`${API_BASE}/status/keys`);
     return await res.json();
   } catch { return { gemini: false, anthropic: false }; }
 };
@@ -50,7 +46,7 @@ export const getKeyStatus = async () => {
 // --- RAG METHODS ---
 export const ingestContextFile = async (content: string, metadata: any) => {
   try {
-    const res = await fetch(`${API_BASE}/rag/ingest`, {
+    const res = await apiFetch(`${API_BASE}/rag/ingest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, metadata }),
@@ -61,7 +57,7 @@ export const ingestContextFile = async (content: string, metadata: any) => {
 
 export const queryContext = async (query: string): Promise<string> => {
   try {
-    const res = await fetch(`${API_BASE}/rag/query`, {
+    const res = await apiFetch(`${API_BASE}/rag/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query }),
@@ -80,7 +76,7 @@ export const fetchFiles = async (workspaceId?: string): Promise<FileNode[]> => {
     const url = workspaceId 
       ? `${API_BASE}/files?workspaceId=${encodeURIComponent(workspaceId)}`
       : `${API_BASE}/files`;
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     if (!res.ok) throw new Error('Failed to fetch files');
     return res.json();
   } catch (error) {
@@ -90,7 +86,7 @@ export const fetchFiles = async (workspaceId?: string): Promise<FileNode[]> => {
 
 export const readFile = async (filePath: string, workspaceId?: string): Promise<string> => {
   try {
-    const res = await fetch(`${API_BASE}/read`, {
+    const res = await apiFetch(`${API_BASE}/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filePath, workspaceId }),
@@ -101,7 +97,7 @@ export const readFile = async (filePath: string, workspaceId?: string): Promise<
 };
 
 export const writeFile = async (filePath: string, content: string, workspaceId?: string): Promise<void> => {
-  await fetch(`${API_BASE}/write`, {
+  await apiFetch(`${API_BASE}/write`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filePath, content, workspaceId }),
@@ -110,7 +106,7 @@ export const writeFile = async (filePath: string, content: string, workspaceId?:
 
 export const sendChat = async (messages: ChatMessage[], config?: LlmConfig): Promise<ChatMessage> => {
   try {
-    const res = await fetch(`${API_BASE}/chat`, {
+    const res = await apiFetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -500,6 +496,96 @@ export const browsePath = async (path?: string): Promise<BrowseResult> => {
   return res.json();
 };
 
+// --- OPENCODE INTEGRATION ---
+
+export interface OpenCodeHealth {
+  success: boolean;
+  healthy: boolean;
+  version?: string;
+  sessionCount?: number;
+  cliPath?: string;
+  error?: string;
+}
+
+export interface OpenCodePromptResult {
+  success: boolean;
+  routing: string;
+  fallbackUsed: boolean;
+  fallbackReason?: string;
+  content: string;
+  provider: string;
+  model?: string | null;
+  notifyUI?: boolean;
+  metadata?: {
+    agentId?: string;
+    opencodeAgent?: string;
+    sessionId?: string | null;
+    cachedSession?: boolean;
+    originalRouting?: string;
+  };
+}
+
+export const getOpenCodeHealth = async (): Promise<OpenCodeHealth> => {
+  const res = await apiFetch(`${API_BASE}/opencode/health`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get OpenCode health');
+  }
+  return res.json();
+};
+
+export const getOpenCodeAgents = async (): Promise<any> => {
+  const res = await apiFetch(`${API_BASE}/opencode/agents`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get OpenCode agents');
+  }
+  return res.json();
+};
+
+export const getOpenCodeSessions = async (): Promise<any> => {
+  const res = await apiFetch(`${API_BASE}/opencode/sessions`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to get OpenCode sessions');
+  }
+  return res.json();
+};
+
+export const sendOpenCodePrompt = async (
+  agentId: string,
+  prompt: string,
+  options?: { timeout?: number; model?: string }
+): Promise<{ success: boolean; result: OpenCodePromptResult }> => {
+  const res = await apiFetch(`${API_BASE}/opencode/prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId, prompt, options })
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to send OpenCode prompt');
+  }
+
+  return res.json();
+};
+
+export const cacheOpenCodeSession = async (agentId: string, sessionId: string): Promise<any> => {
+  const res = await apiFetch(`${API_BASE}/opencode/cache-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId, sessionId })
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to cache OpenCode session');
+  }
+
+  return res.json();
+};
+
 // File CRUD operations (workspace-aware)
 export const createFile = async (path: string, workspaceId?: string): Promise<void> => {
   const res = await apiFetch(`${API_BASE}/files/create`, {
@@ -552,4 +638,3 @@ export const deleteItem = async (path: string, workspaceId?: string): Promise<vo
     throw new Error(error.error || 'Failed to delete item');
   }
 };
-

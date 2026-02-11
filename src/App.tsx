@@ -18,6 +18,8 @@ import { MainLayout } from './components/MainLayout';
 import { CyberDock } from './components/CyberDock';
 import { TheOrchestrator } from './components/TheOrchestrator';
 import { WorkspaceManager } from './components/WorkspaceManager';
+import { OpenCodeStatus } from './components/OpenCodeStatus';
+import { AgentChat } from './components/AgentChat';
 
 // Core Components (Always loaded)
 import TheTerminal from './components/TheTerminal';
@@ -116,6 +118,7 @@ const AppContent: React.FC = () => {
     const [showCmdPalette, setShowCmdPalette] = useState(false);
     const [showSidebar, setShowSidebar] = useState(true);
     const [showWorkspaceManager, setShowWorkspaceManager] = useState(false);
+    const [showAgentChat, setShowAgentChat] = useState(false);
 
     // Settings / Config - Initialize from LocalStorage
     const [profiles, setProfiles] = useState<ConnectionProfile[]>(() => {
@@ -724,21 +727,24 @@ const AppContent: React.FC = () => {
                     </div>
 
                     {/* Council Section */}
-                    <TheCouncil
-                        activeAgent={activeAgents.length > 0 ? activeAgents[0] : manualSelectedAgent}
-                        currentPhase={phase}
-                        onSelectAgent={(agent) => setManualSelectedAgent(agent)}
-                        godMode={godMode}
-                        isMuted={isMuted}
-                        isSupervised={isSupervised}
-                        isThinking={activeAgents.length > 0}
-                        autoRun={isAutoMode}
-                        tokenUsage={0}
-                        onToggleGodMode={() => setGodMode(!godMode)}
-                        onToggleSupervision={() => setIsSupervised(!isSupervised)}
-                        onToggleMute={() => setIsMuted(!isMuted)}
-                        onToggleAutoRun={toggleAuto}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <OpenCodeStatus onOpenChat={() => setShowAgentChat(true)} />
+                        <TheCouncil
+                            activeAgent={activeAgents.length > 0 ? activeAgents[0] : manualSelectedAgent}
+                            currentPhase={phase}
+                            onSelectAgent={(agent) => setManualSelectedAgent(agent)}
+                            godMode={godMode}
+                            isMuted={isMuted}
+                            isSupervised={isSupervised}
+                            isThinking={activeAgents.length > 0}
+                            autoRun={isAutoMode}
+                            tokenUsage={0}
+                            onToggleGodMode={() => setGodMode(!godMode)}
+                            onToggleSupervision={() => setIsSupervised(!isSupervised)}
+                            onToggleMute={() => setIsMuted(!isMuted)}
+                            onToggleAutoRun={toggleAuto}
+                        />
+                    </div>
                 </div>
             }
         >
@@ -817,6 +823,12 @@ const AppContent: React.FC = () => {
             <WorkspaceManager
                 isOpen={showWorkspaceManager}
                 onClose={() => setShowWorkspaceManager(false)}
+            />
+
+            <AgentChat
+                isOpen={showAgentChat}
+                onClose={() => setShowAgentChat(false)}
+                defaultAgent={manualSelectedAgent}
             />
         </MainLayout>
     );

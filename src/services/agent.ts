@@ -382,3 +382,30 @@ export const runRoundtableLoop = async (
         await new Promise(r => setTimeout(r, 1000));
     }
 };
+
+// Build a dedicated chat context for a specific agent persona
+export const openAgentChat = (
+    agentId: AgentProfile,
+    userPrompt: string,
+    history: ChatMessage[] = []
+): ChatMessage[] => {
+    const def = AGENT_DEFINITIONS[agentId];
+    const systemMessage: ChatMessage = {
+        role: 'system',
+        content: `IDENTITY: ${def.name} (${def.role}).\n${def.systemPrompt}\nRespond as this agent persona and stay concise unless asked for detail.`,
+        timestamp: Date.now(),
+        agentId
+    };
+    const userMessage: ChatMessage = {
+        role: 'user',
+        content: userPrompt,
+        timestamp: Date.now(),
+        agentId
+    };
+
+    if (history.length > 0) {
+        return [...history, userMessage];
+    }
+
+    return [systemMessage, userMessage];
+};
