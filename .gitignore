@@ -26,9 +26,26 @@ Thumbs.db
 *.swo
 *~
 .cursor
-.neuraldeck
+
+# NeuralDeck runtime state (keep templates/config, ignore caches/logs)
+.neuraldeck/*
+!.neuraldeck/agent-mappings.json
+!.neuraldeck/routing-config.json
+
+# Local tooling / automation artifacts
+.claude/
+.claude-flow/
+stories/
+backups/
+*.pid
+playwright-report/
+test-results/
+external/*.tar.gz
+opencode.jsonc.backup
 
 # OpenCode custom agents (machine-specific configurations)
 .opencode/agents/*.md
 !.opencode/agents/README.md
 
+# Upstream source checkout (large, managed via scripts)
+external/opencode-upstream/

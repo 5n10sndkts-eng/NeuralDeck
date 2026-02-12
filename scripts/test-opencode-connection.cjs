@@ -56,8 +56,18 @@ async function testOpenCodeConnection() {
   log('║          OpenCode SDK Connection Test Suite               ║', 'cyan');
   log('╚════════════════════════════════════════════════════════════╝', 'cyan');
 
-  const baseUrl = process.env.VITE_OPENCODE_URL || 'http://localhost:4096';
-  log(`\nOpenCode URL: ${baseUrl}`, 'yellow');
+  const baseUrlCandidates = Array.from(
+    new Set(
+      [
+        process.env.OPENCODE_URL,
+        process.env.VITE_OPENCODE_URL,
+        'http://127.0.0.1:4096',
+        'http://localhost:4096'
+      ].filter(Boolean)
+    )
+  );
+  let baseUrl = baseUrlCandidates[0];
+  log(`\nOpenCode URL candidates: ${baseUrlCandidates.join(', ')}`, 'yellow');
 
   let testsPassed = 0;
   let testsFailed = 0;
@@ -98,23 +108,40 @@ async function testOpenCodeConnection() {
     }
 
     // ============================================
-    // Test 3: Health Check
+    // Test 3: Connectivity Check
     // ============================================
-    logTest(3, 'Health check endpoint');
+    logTest(3, 'Path endpoint connectivity');
     
     try {
-      const healthResponse = await client.global.health();
-      
-      if (healthResponse.data && healthResponse.data.status === 'ok') {
-        logSuccess(`Health: ${JSON.stringify(healthResponse.data)}`);
-        testsPassed++;
-      } else {
-        logWarning(`Unexpected health response: ${JSON.stringify(healthResponse.data)}`);
-        testsPassed++;
+      let connected = false;
+      let lastError = null;
+
+      for (const candidateUrl of baseUrlCandidates) {
+        try {
+          const candidateClient = createOpencodeClient({ baseUrl: candidateUrl });
+          const pathResponse = await candidateClient.path.get();
+          if (pathResponse?.data) {
+            client = candidateClient;
+            baseUrl = candidateUrl;
+            logSuccess(`Connected via ${candidateUrl}`);
+            logSuccess(`Connected path: ${pathResponse.data}`);
+            connected = true;
+            break;
+          }
+        } catch (error) {
+          lastError = error;
+        }
       }
+
+      if (!connected) {
+        throw lastError || new Error('No OpenCode endpoint responded');
+      }
+
+      testsPassed++;
     } catch (error) {
-      logError(`Health check failed: ${error.message}`);
-      logWarning('Is OpenCode server running? Try: opencode server start --port 4096');
+      logError(`Connectivity check failed: ${error.message}`);
+      logWarning(`Tried URLs: ${baseUrlCandidates.join(', ')}`);
+      logWarning('Is OpenCode server running? Try: /Users/ku3h/.opencode/bin/opencode serve --hostname 127.0.0.1 --port 4096');
       testsFailed++;
       process.exit(1);
     }
@@ -226,7 +253,7 @@ async function testOpenCodeConnection() {
       logTest(8, 'Get session messages');
       
       try {
-        const messagesResponse = await client.session.messages.list({
+        const messagesResponse = await client.session.messages({
           path: { id: testSessionId }
         });
         

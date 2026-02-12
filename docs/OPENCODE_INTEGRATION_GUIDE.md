@@ -42,6 +42,8 @@ Frontend components:
   - Returns OpenCode CLI sessions and local session cache snapshot
 - `POST /api/opencode/prompt`
   - Routes prompts based on agent id and routing rules
+- `POST /api/opencode/swarm`
+  - Runs a prompt across multiple agents using `broadcast` or `consensus`
 - `POST /api/opencode/cache-session`
   - Persists a session id for a NeuralDeck agent
 
@@ -52,6 +54,8 @@ All endpoints require authenticated requests through the existing session token 
 1. Request enters `providerAdapter.routeToAgent(prompt, agentId, options)`.
 2. `shouldUseOpenCode(agentId)` checks `.neuraldeck/routing-config.json`.
 3. If OpenCode-routed:
+   - If `OPENCODE_USE_SDK=1`, attempt SDK route first (`openCodeAdapter`)
+   - On SDK init/prompt failure, automatically fall back to CLI route
    - `opencodeCLI.sendToNeuralDeckAgent(...)` resolves mapping and session behavior
    - If configured, session id is read from cache or created and cached
 4. On OpenCode failure and fallback enabled:
@@ -108,8 +112,12 @@ npm run build
   - use `GET /api/opencode/sessions` to compare cache vs CLI session list
 - Fallback not triggered:
   - verify `fallback_enabled` is true in `.neuraldeck/routing-config.json`
+- SDK route never used:
+  - set `OPENCODE_USE_SDK=1` in backend environment
+  - inspect response metadata `transport` (`sdk` or `cli`)
 
 ## Notes
 
 - OpenCode prompt routing returns metadata including routing source, fallback status, and mapped OpenCode agent.
+- OpenCode metadata includes `transport` and `sdkFallbackReason` when SDK-first routing is enabled.
 - Local fallback behavior is preserved to avoid blocking tactical workflows during OpenCode outages.

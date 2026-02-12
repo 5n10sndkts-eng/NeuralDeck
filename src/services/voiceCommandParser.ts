@@ -15,35 +15,111 @@ export interface CommandPattern {
   pattern: RegExp;
   action: string;
   category: 'navigation' | 'agent' | 'file' | 'system';
+  examples: string[];
 }
 
 // Command vocabulary with regex patterns
 const COMMAND_PATTERNS: CommandPattern[] = [
   // Navigation commands
-  { pattern: /show (the )?workspace/i, action: 'navigate:workspace', category: 'navigation' },
-  { pattern: /open (the )?construct/i, action: 'navigate:construct', category: 'navigation' },
-  { pattern: /switch to (the )?terminal/i, action: 'navigate:terminal', category: 'navigation' },
-  { pattern: /show (the )?dashboard/i, action: 'navigate:dashboard', category: 'navigation' },
-  { pattern: /go to workspace/i, action: 'navigate:workspace', category: 'navigation' },
+  {
+    pattern: /show (the )?workspace/i,
+    action: 'navigation:workspace',
+    category: 'navigation',
+    examples: ['show workspace', 'show the workspace', 'go to workspace'],
+  },
+  {
+    pattern: /open (the )?construct/i,
+    action: 'navigation:construct',
+    category: 'navigation',
+    examples: ['open construct', 'open the construct'],
+  },
+  {
+    pattern: /switch to (the )?terminal/i,
+    action: 'navigation:terminal',
+    category: 'navigation',
+    examples: ['switch to terminal', 'switch to the terminal'],
+  },
+  {
+    pattern: /show (the )?dashboard/i,
+    action: 'navigation:dashboard',
+    category: 'navigation',
+    examples: ['show dashboard', 'show the dashboard'],
+  },
+  {
+    pattern: /go to workspace/i,
+    action: 'navigation:workspace',
+    category: 'navigation',
+    examples: ['go to workspace'],
+  },
   
   // Agent control commands
-  { pattern: /activate (\w+)/i, action: 'agent:activate', category: 'agent' },
-  { pattern: /run (the )?swarm/i, action: 'agent:swarm', category: 'agent' },
-  { pattern: /stop (all )?agents/i, action: 'agent:stop', category: 'agent' },
-  { pattern: /pause agents/i, action: 'agent:pause', category: 'agent' },
-  { pattern: /resume agents/i, action: 'agent:resume', category: 'agent' },
+  {
+    pattern: /activate (\w+)/i,
+    action: 'agent:activate',
+    category: 'agent',
+    examples: ['activate analyst', 'activate architect'],
+  },
+  {
+    pattern: /run (the )?swarm/i,
+    action: 'agent:swarm',
+    category: 'agent',
+    examples: ['run swarm', 'run the swarm'],
+  },
+  {
+    pattern: /stop (all )?agents/i,
+    action: 'agent:stop',
+    category: 'agent',
+    examples: ['stop agents', 'stop all agents'],
+  },
+  {
+    pattern: /pause agents/i,
+    action: 'agent:pause',
+    category: 'agent',
+    examples: ['pause agents'],
+  },
+  {
+    pattern: /resume agents/i,
+    action: 'agent:resume',
+    category: 'agent',
+    examples: ['resume agents'],
+  },
   
   // File operation commands
-  { pattern: /open file (.+)/i, action: 'file:open', category: 'file' },
-  { pattern: /create (a )?new file/i, action: 'file:create', category: 'file' },
-  { pattern: /save (all )?files?/i, action: 'file:save', category: 'file' },
-  { pattern: /close file/i, action: 'file:close', category: 'file' },
+  {
+    pattern: /open file (.+)/i,
+    action: 'file:open',
+    category: 'file',
+    examples: ['open file app.tsx'],
+  },
+  {
+    pattern: /create (a )?new file/i,
+    action: 'file:create',
+    category: 'file',
+    examples: ['create new file', 'create a new file'],
+  },
+  {
+    pattern: /save (all )?files?/i,
+    action: 'file:save',
+    category: 'file',
+    examples: ['save file', 'save all files'],
+  },
+  {
+    pattern: /close file/i,
+    action: 'file:close',
+    category: 'file',
+    examples: ['close file'],
+  },
   
   // System commands
-  { pattern: /help/i, action: 'system:help', category: 'system' },
-  { pattern: /repeat (last|that)/i, action: 'system:repeat', category: 'system' },
-  { pattern: /cancel/i, action: 'system:cancel', category: 'system' },
-  { pattern: /undo/i, action: 'system:undo', category: 'system' },
+  { pattern: /help/i, action: 'system:help', category: 'system', examples: ['help'] },
+  {
+    pattern: /repeat (last|that)/i,
+    action: 'system:repeat',
+    category: 'system',
+    examples: ['repeat last', 'repeat that'],
+  },
+  { pattern: /cancel/i, action: 'system:cancel', category: 'system', examples: ['cancel'] },
+  { pattern: /undo/i, action: 'system:undo', category: 'system', examples: ['undo'] },
 ];
 
 /**
@@ -92,11 +168,18 @@ function similarityScore(str1: string, str2: string): number {
  * Parse voice transcript into command
  */
 export function parseVoiceCommand(
-  transcript: string,
+  transcript: string | null | undefined,
   speechConfidence: number = 1.0,
   confidenceThreshold: number = 0.7
 ): VoiceCommand | null {
+  if (typeof transcript !== 'string') {
+    return null;
+  }
+
   const normalizedTranscript = transcript.trim().toLowerCase();
+  if (!normalizedTranscript) {
+    return null;
+  }
 
   // Try exact pattern matching first
   for (const pattern of COMMAND_PATTERNS) {
@@ -113,27 +196,20 @@ export function parseVoiceCommand(
   }
 
   // Fuzzy matching fallback
-  let bestMatch: { pattern: CommandPattern; score: number; target?: string } | null = null;
+  let bestMatch: { pattern: CommandPattern; score: number } | null = null;
 
   for (const pattern of COMMAND_PATTERNS) {
-    const patternString = pattern.pattern.source
-      .replace(/\\/gi, '')
-      .replace(/\(\?\:/g, '')
-      .replace(/\)/g, '')
-      .replace(/\|/g, ' ')
-      .trim();
-
-    const score = similarityScore(normalizedTranscript, patternString);
-
-    if (score > 0.6 && (!bestMatch || score > bestMatch.score)) {
-      bestMatch = { pattern, score, target: undefined };
+    for (const example of pattern.examples) {
+      const score = similarityScore(normalizedTranscript, example);
+      if (score > 0.72 && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { pattern, score };
+      }
     }
   }
 
   if (bestMatch && bestMatch.score * speechConfidence >= confidenceThreshold) {
     return {
       action: bestMatch.pattern.action,
-      target: bestMatch.target,
       confidence: bestMatch.score * speechConfidence,
     };
   }

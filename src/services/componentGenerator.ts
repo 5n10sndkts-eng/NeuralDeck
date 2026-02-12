@@ -6,6 +6,7 @@
  */
 
 import type { VisionAnalysisResult, ComponentDescription } from './visionAnalyzer';
+import { authFetch } from './auth';
 
 export interface GeneratedComponent {
   name: string;
@@ -252,7 +253,7 @@ export async function saveGeneratedComponent(
   mode: 'versioned' | 'overwrite' = 'versioned'
 ): Promise<{ success: boolean; path: string; backupCreated: boolean }> {
   try {
-    const response = await fetch('/api/files/save', {
+    const response = await authFetch('/api/files/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -293,7 +294,7 @@ export async function saveGeneratedComponent(
  */
 export async function checkComponentExists(filePath: string): Promise<boolean> {
   try {
-    const response = await fetch(`/api/files/check?path=${encodeURIComponent(filePath)}`);
+    const response = await authFetch(`/api/files/check?path=${encodeURIComponent(filePath)}`);
     
     if (!response.ok) {
       throw new Error('File check failed');

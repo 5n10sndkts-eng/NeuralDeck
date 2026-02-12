@@ -17,11 +17,14 @@ export type SFXType =
   | 'typing';
 
 class SoundEffects {
+  // Master kill-switch: keep service API but disable all playback.
+  private readonly audioDisabled: boolean = true;
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private volume: number = 0.5;
 
   init(volume: number = 0.5): void {
+    if (this.audioDisabled) return;
     if (this.audioContext) return;
 
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -32,6 +35,7 @@ class SoundEffects {
   }
 
   setVolume(volume: number): void {
+    if (this.audioDisabled) return;
     this.volume = volume;
     if (this.masterGain) {
       this.masterGain.gain.value = volume;
@@ -39,6 +43,7 @@ class SoundEffects {
   }
 
   play(type: SFXType, pan: number = 0): void {
+    if (this.audioDisabled) return;
     if (!this.audioContext || !this.masterGain) {
       this.init();
     }

@@ -8,6 +8,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from './useSocket';
+import { authFetch } from '../services/auth';
+
+const env = (globalThis as any)?.import?.meta?.env || (typeof process !== 'undefined' ? process.env : {}) || {};
+const API_BASE = env.VITE_API_BASE || 'http://localhost:3001/api';
 
 export interface StoryMetadata {
     id: string;           // Unique identifier (e.g., 'story-1-auth')
@@ -84,7 +88,7 @@ export const useStoryWatcher = () => {
     // Fetch initial stories list
     const fetchStories = useCallback(async () => {
         try {
-            const response = await fetch('http://localhost:3001/api/stories');
+            const response = await authFetch(`${API_BASE}/stories`);
             if (!response.ok) {
                 throw new Error(`Failed to fetch stories: ${response.statusText}`);
             }

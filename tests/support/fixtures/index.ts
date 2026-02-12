@@ -9,7 +9,7 @@
  * Reference: _bmad/bmm/testarch/knowledge/fixture-architecture.md
  */
 
-import { test as base } from '@playwright/test';
+import { test as base, type APIRequestContext } from '@playwright/test';
 import { UserFactory } from './factories/user-factory';
 
 /**
@@ -21,9 +21,36 @@ import { UserFactory } from './factories/user-factory';
  */
 type TestFixtures = {
   userFactory: UserFactory;
+  request: APIRequestContext;
 };
 
 export const test = base.extend<TestFixtures>({
+  request: async ({ playwright }, use) => {
+    const apiBaseUrl = process.env.API_BASE_URL || 'http://localhost:3001';
+
+    const bootstrap = await playwright.request.newContext({ baseURL: apiBaseUrl });
+    let token: string | null = null;
+    try {
+      const sessionResponse = await bootstrap.post('/api/auth/session', {
+        data: { userId: 'playwright-e2e' },
+      });
+      if (sessionResponse.ok()) {
+        const payload = await sessionResponse.json();
+        token = payload?.token || null;
+      }
+    } finally {
+      await bootstrap.dispose();
+    }
+
+    const authed = await playwright.request.newContext({
+      baseURL: apiBaseUrl,
+      extraHTTPHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    await use(authed);
+    await authed.dispose();
+  },
+
   userFactory: async ({ request }, use) => {
     const factory = new UserFactory(request);
     await use(factory);

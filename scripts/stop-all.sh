@@ -17,6 +17,23 @@ NC='\033[0m' # No Color
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
+ensure_opencode() {
+    if command -v opencode >/dev/null 2>&1; then
+        command -v opencode
+        return 0
+    fi
+
+    for candidate in "$HOME/.opencode/bin/opencode" "$HOME/.local/bin/opencode"; do
+        if [ -x "$candidate" ]; then
+            export PATH="$(dirname "$candidate"):$PATH"
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 echo -e "${CYAN}"
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                  NeuralDeck Shutdown                       ║"
@@ -125,9 +142,33 @@ echo ""
 echo -e "${YELLOW}[3/3] Stopping OpenCode Server...${NC}"
 
 # Check if OpenCode CLI is installed
-if command -v opencode &> /dev/null; then
-    # Try to stop OpenCode server
-    if opencode server stop 2>/dev/null; then
+OPENCODE_BIN="$(ensure_opencode || true)"
+if [ -n "$OPENCODE_BIN" ]; then
+    if [ -f "opencode.pid" ]; then
+        OPENCODE_PID="$(cat opencode.pid)"
+        if kill -0 "$OPENCODE_PID" 2>/dev/null; then
+            kill "$OPENCODE_PID" 2>/dev/null || true
+
+            for i in {1..5}; do
+                if ! kill -0 "$OPENCODE_PID" 2>/dev/null; then
+                    break
+                fi
+                sleep 1
+            done
+
+            if kill -0 "$OPENCODE_PID" 2>/dev/null; then
+                kill -9 "$OPENCODE_PID" 2>/dev/null || true
+                echo -e "${YELLOW}  ⚠ OpenCode force-stopped${NC}"
+            else
+                echo -e "${GREEN}  ✓ OpenCode server stopped (PID $OPENCODE_PID)${NC}"
+            fi
+            OPENCODE_STOPPED=true
+        else
+            echo -e "${YELLOW}  ⚠ OpenCode process not running (stale PID)${NC}"
+        fi
+        rm -f opencode.pid
+    elif "$OPENCODE_BIN" server stop >/dev/null 2>&1; then
+        # Legacy CLI fallback
         echo -e "${GREEN}  ✓ OpenCode server stopped${NC}"
         OPENCODE_STOPPED=true
     else

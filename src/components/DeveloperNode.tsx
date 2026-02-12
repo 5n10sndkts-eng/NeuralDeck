@@ -98,6 +98,10 @@ const DeveloperNode: React.FC<DeveloperNodeProps> = ({ data, isConnectable }) =>
             />
 
             <motion.div
+                data-testid="agent-node"
+                data-agent="swarm"
+                data-agent-id={storyId}
+                data-state={state}
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{
                     scale: 1,

@@ -1,3 +1,5 @@
+import { authFetch } from './auth';
+
 /**
  * Vision AI Analyzer
  * 
@@ -59,7 +61,7 @@ export async function analyzeWithGPT4V(
   try {
     // Call BACKEND PROXY instead of OpenAI directly
     // API key is stored in server environment, never in client code
-    const response = await fetch('/api/vision/analyze', {
+    const response = await authFetch('/api/vision/analyze', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -159,9 +161,12 @@ export async function analyzeWithLocalFallback(
  * SECURITY: API key is NEVER exposed to client - all calls go through /api/vision/analyze
  */
 export async function analyzeUIImage(
-  imageDataUrl: string,
+  imageInput: string | File,
   preferLocal: boolean = false
 ): Promise<VisionAnalysisResult> {
+  const imageDataUrl =
+    typeof imageInput === 'string' ? imageInput : await fileToDataUrl(imageInput);
+
   // If user explicitly requests local mode, skip backend
   if (preferLocal) {
     return analyzeWithLocalFallback(imageDataUrl);

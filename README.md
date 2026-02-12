@@ -62,9 +62,47 @@ Backend API routes:
 - `GET /api/opencode/agents`
 - `GET /api/opencode/sessions`
 - `POST /api/opencode/prompt`
+- `POST /api/opencode/swarm`
 - `POST /api/opencode/cache-session`
 
 See `docs/OPENCODE_INTEGRATION_GUIDE.md` for setup, routing behavior, and troubleshooting.
+
+## Upstream-First OpenCode Workflow
+
+NeuralDeck now tracks OpenCode upstream source directly under:
+
+- `external/opencode-upstream` (upstream repo clone)
+
+Commands:
+
+```bash
+npm run upstream:bootstrap
+npm run upstream:sync
+npm run upstream:status
+npm run upstream:patch:export
+npm run upstream:dev
+```
+
+NeuralDeck custom agents are synced from legacy `/.opencode/agents` into overlay and then applied to upstream via:
+
+```bash
+npm run upstream:agents:sync
+npm run upstream:overlay:apply
+```
+
+Patch artifact export:
+
+```bash
+npm run upstream:patch:export
+```
+
+Environment/preflight checks:
+
+```bash
+npm run opencode:doctor
+```
+
+See `docs/OPENCODE_UPSTREAM_BASELINE.md` for the fork-style architecture and migration plan.
 
 ## Testing
 

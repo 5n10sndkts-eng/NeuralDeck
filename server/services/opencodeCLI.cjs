@@ -319,41 +319,45 @@ class OpenCodeCLIService {
       agent = null
     } = options;
 
-    // OpenCode CLI doesn't have direct session create command
-    // Sessions are created automatically when you run a prompt
-    // We'll start a session by running an init prompt
+    // OpenCode CLI doesn't expose "session create", so bootstrap via run.
     const initPrompt = `Session initialized: ${title}`;
-    
     let command = `run "${initPrompt}" --model ${model}`;
-    if (agent) {
-      command += ` --agent ${agent}`;
-    }
+    if (agent) command += ` --agent ${agent}`;
 
     try {
-      const result = await this.exec(command, { parseJSON: false, timeout: 30000 });
-      
-      // Get the session ID from recent sessions
-      const sessions = await this.listSessions();
-      const latestSession = sessions[0]; // Most recent
-      
-      if (latestSession) {
-        // Cache session ID for this agent
-        if (agent) {
-          this.sessionCache.set(agent, latestSession.id);
-        }
-        
+      await this.exec(command, { parseJSON: false, timeout: 30000 });
+    } catch (error) {
+      // Fallback: when run fails (auth/model/network), reuse an existing session if available.
+      const existing = await this.listSessions();
+      const latestExisting = existing[0];
+      if (latestExisting?.id) {
+        if (agent) this.sessionCache.set(agent, latestExisting.id);
         return {
-          id: latestSession.id,
-          title: latestSession.title || title,
+          id: latestExisting.id,
+          title: latestExisting.title || title,
           model,
-          agent
+          agent,
+          reused: true
         };
       }
-
-      throw new Error('Failed to create session');
-    } catch (error) {
       throw new Error(`Session creation failed: ${error.message}`);
     }
+
+    // Get most recent session after successful run.
+    const sessions = await this.listSessions();
+    const latestSession = sessions[0];
+    if (!latestSession?.id) {
+      throw new Error('Session creation failed: no session found after run');
+    }
+
+    if (agent) this.sessionCache.set(agent, latestSession.id);
+
+    return {
+      id: latestSession.id,
+      title: latestSession.title || title,
+      model,
+      agent
+    };
   }
 
   /**
@@ -465,17 +469,41 @@ class OpenCodeCLIService {
       timeout = 60000
     } = options;
 
-    // Convert args to JSON string
-    const argsJson = JSON.stringify(args).replace(/"/g, '\\"');
+    const argsEntries = Object.entries(args || {});
+    const dockerArgs = argsEntries
+      .map(([key, value]) => `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)
+      .join(' ');
 
-    let command = `mcp exec --name ${toolName} --args "${argsJson}"`;
-    
+    const attempts = [];
     if (server) {
-      command += ` --server ${server}`;
+      attempts.push(`${this.cliPath} mcp exec --server ${server} --name ${toolName} --args '${JSON.stringify(args)}'`);
+    }
+    attempts.push(`${this.cliPath} mcp exec --name ${toolName} --args '${JSON.stringify(args)}'`);
+    attempts.push(`docker mcp tools call ${toolName}${dockerArgs ? ` ${dockerArgs}` : ''}`);
+
+    let lastError = null;
+    for (const command of attempts) {
+      try {
+        const { stdout } = await execAsync(command, {
+          cwd: this.projectPath,
+          timeout,
+          maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env }
+        });
+
+        const output = (stdout || '').trim();
+        try {
+          return JSON.parse(output);
+        } catch {
+          return { success: true, output };
+        }
+      } catch (error) {
+        lastError = error;
+      }
     }
 
-    const result = await this.exec(command, { parseJSON: true, timeout });
-    return result;
+    const message = lastError?.stderr?.trim() || lastError?.stdout?.trim() || lastError?.message || 'Unknown tool execution failure';
+    throw new Error(`MCP tool execution failed: ${message}`);
   }
 
   /**
@@ -484,18 +512,44 @@ class OpenCodeCLIService {
    * @returns {Promise<Array>} Array of tool definitions
    */
   async listTools(server = null) {
-    try {
-      let command = 'mcp server ls';
-      if (server) {
-        command += ` ${server}`;
-      }
+    const attempts = [
+      `${this.cliPath} mcp server ls${server ? ` ${server}` : ''}`,
+      `${this.cliPath} mcp tools ls${server ? ` ${server}` : ''}`,
+      `docker mcp tools ls --format json`
+    ];
 
-      const result = await this.exec(command, { parseJSON: true });
-      return result.tools || [];
-    } catch (error) {
-      console.error('List tools failed:', error.message);
-      return [];
+    for (const command of attempts) {
+      try {
+        const { stdout } = await execAsync(command, {
+          cwd: this.projectPath,
+          timeout: 30000,
+          maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env }
+        });
+
+        const output = (stdout || '').trim();
+        if (!output) continue;
+
+        // Try JSON first.
+        try {
+          const parsed = JSON.parse(output);
+          if (Array.isArray(parsed)) return parsed;
+          if (Array.isArray(parsed.tools)) return parsed.tools;
+        } catch {
+          // Parse text output fallback (best effort).
+          const lines = output.split('\n').map(line => line.trim()).filter(Boolean);
+          const filtered = lines.filter(line => !line.toLowerCase().startsWith('tool call took:'));
+          if (filtered.length > 0) {
+            return filtered.map(name => ({ name }));
+          }
+        }
+      } catch {
+        // Try next command variant.
+      }
     }
+
+    console.error('List tools failed: no compatible MCP tooling command succeeded');
+    return [];
   }
 
   /**
@@ -542,7 +596,24 @@ class OpenCodeCLIService {
     const model = options.model || 'claude/claude-sonnet-4-20250514';
 
     if (mapping.session_required) {
+      const clearCachedSession = () => {
+        this.sessionCache.delete(agentId);
+        const cacheData = this._loadSessionCache();
+        if (cacheData?.sessions?.[agentId]) {
+          delete cacheData.sessions[agentId];
+          this._saveSessionCache(cacheData);
+        }
+      };
+
       let sessionId = this.getCachedSessionId(agentId);
+
+      if (sessionId) {
+        const existing = await this.getSession(sessionId);
+        if (!existing) {
+          clearCachedSession();
+          sessionId = null;
+        }
+      }
 
       if (!sessionId) {
         const created = await this.createSession(`${agentId} Session`, {
@@ -556,7 +627,29 @@ class OpenCodeCLIService {
         });
       }
 
-      const response = await this.sendToSession(sessionId, prompt, { timeout });
+      let response;
+      try {
+        response = await this.sendToSession(sessionId, prompt, { timeout });
+      } catch (error) {
+        const errorText = String(error?.message || '');
+        const sessionRelatedFailure = /session/i.test(errorText) || /--session/.test(errorText);
+        if (!sessionRelatedFailure) {
+          throw error;
+        }
+
+        clearCachedSession();
+        const created = await this.createSession(`${agentId} Session`, {
+          model,
+          agent: opencodeAgent
+        });
+        sessionId = created.id;
+        this.cacheSessionId(agentId, sessionId, {
+          opencodeAgent,
+          type: mapping.type
+        });
+        response = await this.sendToSession(sessionId, prompt, { timeout });
+      }
+
       return {
         ...response,
         agentId,

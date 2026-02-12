@@ -23,9 +23,11 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VisionDropZone } from '../../src/components/VisionDropZone';
 import * as visionAnalyzer from '../../src/services/visionAnalyzer';
+import { authFetch } from '../../src/services/auth';
 
-// Mock vision analyzer to avoid real API calls
-jest.mock('../../src/services/visionAnalyzer');
+jest.mock('../../src/services/auth', () => ({
+  authFetch: jest.fn(),
+}));
 
 describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
   let mockOnDrop: jest.Mock;
@@ -33,17 +35,21 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
   beforeEach(() => {
     mockOnDrop = jest.fn();
     jest.clearAllMocks();
+    localStorage.clear();
+    (authFetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ components: [], layout: 'grid', colors: [] })
+    });
   });
 
   describe('R-003: API Key Not Exposed in Client', () => {
     test('[P0] should never expose API keys in client-side code', async () => {
       // GIVEN vision analyzer is called
-      const mockAnalyze = visionAnalyzer.analyzeUIImage as jest.Mock;
-      mockAnalyze.mockResolvedValue({
+      const analyzeSpy = jest.spyOn(visionAnalyzer, 'analyzeUIImage').mockResolvedValue({
         components: [],
         layout: 'grid',
         colors: []
-      });
+      } as any);
 
       // WHEN analyzing an image
       const mockFile = new File(['fake-image-data'], 'mockup.png', { type: 'image/png' });
@@ -51,30 +57,25 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
 
       // THEN API key should NOT be passed from client
       // (Should use backend proxy endpoint instead)
-      expect(mockAnalyze).toHaveBeenCalled();
-      const callArgs = mockAnalyze.mock.calls[0];
+      expect(analyzeSpy).toHaveBeenCalledWith(mockFile);
+      const callArgs = analyzeSpy.mock.calls[0];
       
       // Verify no API key in arguments
       const argsString = JSON.stringify(callArgs);
       expect(argsString).not.toMatch(/sk-/); // OpenAI API key pattern
       expect(argsString).not.toMatch(/api_key/);
       expect(argsString).not.toMatch(/apiKey/);
+
+      analyzeSpy.mockRestore();
     });
 
     test('[P0] should call backend proxy endpoint, not direct OpenAI API', async () => {
-      // GIVEN network mock
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ components: [], layout: 'grid', colors: [] })
-      });
-
       // WHEN analyzing an image
-      const mockFile = new File(['fake-image-data'], 'mockup.png', { type: 'image/png' });
-      await visionAnalyzer.analyzeUIImage(mockFile);
+      await visionAnalyzer.analyzeUIImage('data:image/png;base64,ZmFrZS1pbWFnZS1kYXRh');
 
       // THEN should call backend proxy (not api.openai.com directly)
-      expect(global.fetch).toHaveBeenCalled();
-      const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(authFetch).toHaveBeenCalled();
+      const fetchUrl = (authFetch as jest.Mock).mock.calls[0][0];
       
       // Verify backend proxy endpoint
       expect(fetchUrl).toMatch(/\/api\/vision\/analyze/);
@@ -88,7 +89,7 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
       
       // WHEN vision analyzer runs
       const mockFile = new File(['fake-image-data'], 'mockup.png', { type: 'image/png' });
-      visionAnalyzer.analyzeUIImage(mockFile);
+      visionAnalyzer.analyzeUIImage(mockFile).catch(() => undefined);
       
       // THEN no API keys should be logged
       const logCalls = consoleLogSpy.mock.calls.flat().join(' ');
@@ -132,6 +133,7 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
 
     test('[P0] should accept images smaller than 10MB', async () => {
       // GIVEN VisionDropZone component
+      localStorage.setItem('vision_consent_granted', 'true');
       render(<VisionDropZone onDrop={mockOnDrop}><div>Drop zone content</div></VisionDropZone>);
       const dropZone = screen.getByTestId('vision-drop-zone');
 
@@ -200,7 +202,7 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
       // THEN consent dialog should appear
       await waitFor(() => {
         expect(screen.getByText(/may contain sensitive data/i)).toBeInTheDocument();
-        expect(screen.getByText(/proceed/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /proceed/i })).toBeInTheDocument();
       });
     });
 
@@ -216,8 +218,8 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
       fireEvent.drop(dropZone, dropEvent);
 
       // WHEN user clicks "Decline"
-      await waitFor(() => screen.getByText(/decline|cancel/i));
-      fireEvent.click(screen.getByText(/decline|cancel/i));
+      await waitFor(() => screen.getByRole('button', { name: /decline|cancel/i }));
+      fireEvent.click(screen.getByRole('button', { name: /decline|cancel/i }));
 
       // THEN image should not be processed
       expect(mockOnDrop).not.toHaveBeenCalled();
@@ -235,8 +237,8 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
       fireEvent.drop(dropZone, dropEvent);
 
       // WHEN user clicks "Accept"
-      await waitFor(() => screen.getByText(/proceed|accept/i));
-      fireEvent.click(screen.getByText(/proceed|accept/i));
+      await waitFor(() => screen.getByRole('button', { name: /proceed|accept/i }));
+      fireEvent.click(screen.getByRole('button', { name: /proceed|accept/i }));
 
       // THEN image should be processed
       await waitFor(() => {

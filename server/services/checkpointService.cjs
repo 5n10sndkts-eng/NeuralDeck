@@ -116,7 +116,12 @@ class CheckpointService {
         await this.initialize();
 
         const id = this.generateId();
-        const timestamp = Date.now();
+        // Ensure timestamp ordering is stable per file, even within the same millisecond.
+        const existingIds = this.index.fileMap[filePath] || [];
+        const latestTimestamp = existingIds
+            .map(cpId => this.index.checkpoints[cpId]?.timestamp || 0)
+            .reduce((max, value) => Math.max(max, value), 0);
+        const timestamp = Math.max(Date.now(), latestTimestamp + 1);
         const contentHash = this.hashContent(content);
         const relPath = this.getRelativePath(filePath);
 
@@ -125,7 +130,8 @@ class CheckpointService {
         await fs.mkdir(fileDir, { recursive: true });
 
         // Store content
-        const contentFile = path.join(fileDir, `${timestamp}.txt`);
+        // Include checkpoint ID to avoid same-millisecond filename collisions.
+        const contentFile = path.join(fileDir, `${timestamp}-${id}.txt`);
         await fs.writeFile(contentFile, content, 'utf-8');
 
         // Create checkpoint record

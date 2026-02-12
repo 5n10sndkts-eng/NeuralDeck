@@ -1,0 +1,46 @@
+name: OpenCode Upstream Overlay
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  validate-upstream-overlay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Bootstrap upstream and apply overlay
+        run: ./scripts/opencode-upstream-bootstrap.sh
+
+      - name: Show upstream status
+        run: ./scripts/opencode-upstream-status.sh
+
+      - name: Verify overlay patch exists
+        run: |
+          test -s patches/opencode-upstream/neuraldeck-overlay.patch
+          echo "Overlay patch is present and non-empty"
+
+      - name: Smoke test upstream CLI source
+        run: |
+          bun run --cwd external/opencode-upstream/packages/opencode --conditions=browser src/index.ts --help
+
+      - name: Upload overlay patch artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-upstream-overlay-patch
+          path: patches/opencode-upstream/neuraldeck-overlay.patch
+          if-no-files-found: error
+          retention-days: 14

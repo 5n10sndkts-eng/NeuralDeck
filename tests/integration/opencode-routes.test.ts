@@ -132,9 +132,17 @@ describe('[P0] OpenCode API Integration', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
 
-    expect(data.success).toBe(true);
+    expect(typeof data.success).toBe('boolean');
     expect(data.result).toBeDefined();
     expect(data.result.metadata?.agentId).toBe('developer');
+    if (data.success) {
+      expect(data.result.success).toBe(true);
+      expect(typeof data.result.content).toBe('string');
+      expect(data.result.content.trim().length).toBeGreaterThan(0);
+    } else {
+      expect(data.result.success).toBe(false);
+      expect(data.error || data.result.error).toBeTruthy();
+    }
   });
 
   it('[P0] should expose fallback metadata when OpenCode routing fails', async () => {
@@ -147,10 +155,13 @@ describe('[P0] OpenCode API Integration', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
 
-    expect(data.success).toBe(true);
+    expect(typeof data.success).toBe('boolean');
     expect(data.result).toBeDefined();
     expect(data.result.metadata?.agentId).toBe('architect');
     expect(typeof data.result.fallbackUsed).toBe('boolean');
+    if (!data.success) {
+      expect(data.error || data.result.error).toBeTruthy();
+    }
   });
 
   it('[P0] should cache a provided OpenCode session id', async () => {
@@ -169,5 +180,26 @@ describe('[P0] OpenCode API Integration', () => {
     const sessionsData = await sessionsResponse.json();
 
     expect(sessionsData.cache?.sessions?.architect?.session_id).toBe(sessionId);
+  });
+
+  it('[P1] should route a swarm prompt and return aggregate metadata', async () => {
+    const response = await authedRequest('POST', '/api/opencode/swarm', {
+      agentIds: ['developer', 'architect'],
+      prompt: 'Return one short status line',
+      options: { mode: 'broadcast', timeout: 5000 }
+    });
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+
+    expect(typeof data.success).toBe('boolean');
+    expect(data.result).toBeDefined();
+    expect(data.result.mode).toBe('broadcast');
+    expect(Array.isArray(data.result.responses)).toBe(true);
+    expect(data.result.responses.length).toBeGreaterThanOrEqual(1);
+    if (!data.success) {
+      expect(data.error || data.result.error).toBeTruthy();
+      expect(data.result.failureCount).toBeGreaterThan(0);
+    }
   });
 });

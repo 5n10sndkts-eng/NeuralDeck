@@ -16,7 +16,7 @@ export const HiveStatus: React.FC<{ className?: string }> = ({ className = '' })
     useEffect(() => {
         const fetchHive = async () => {
             try {
-                const res = await fetch(`${API_BASE}/hive`);
+                const res = await apiFetch(`${API_BASE}/hive`);
                 const data = await res.json();
                 if (data.memories) {
                     setMemories(data.memories.slice(-5).reverse()); // Show last 5

@@ -21,6 +21,7 @@ import {
 } from '../services/securityAnalyzer';
 import { CyberPanel, CyberButton } from './CyberUI';
 import { useUI } from '../contexts/UIContext';
+import { authFetch } from '../services/auth';
 
 // --- Types ---
 
@@ -313,7 +314,7 @@ export const ThreatDashboard: React.FC<ThreatDashboardProps> = ({
     const fetchFindings = async (id: string) => {
         setIsLoading(true);
         try {
-            const response = await fetch(`/api/security/findings/${id}`);
+            const response = await authFetch(`/api/security/findings/${id}`);
             const data = await response.json();
             if (data.findings) {
                 setFindings(data.findings);
@@ -336,7 +337,7 @@ export const ThreatDashboard: React.FC<ThreatDashboardProps> = ({
             // Persist to backend
             if (scanId) {
                 try {
-                    await fetch(`/api/security/findings/${scanId}/${findingId}`, {
+                    await authFetch(`/api/security/findings/${scanId}/${findingId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: newStatus }),

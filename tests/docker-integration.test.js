@@ -6,7 +6,7 @@
  * Verifies all acceptance criteria for Story 1-4
  */
 
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 const http = require('http');
@@ -22,15 +22,12 @@ const SERVER_PATH = path.join(__dirname, '../server.cjs');
 // Helper to start test server
 let serverProcess = null;
 let serverReady = false;
+let authToken = '';
 
 async function startTestServer() {
     return new Promise((resolve, reject) => {
         const env = { ...process.env, PORT: TEST_PORT };
-        serverProcess = exec(`node ${SERVER_PATH}`, { env }, (error) => {
-            if (error && !serverReady) {
-                reject(error);
-            }
-        });
+        serverProcess = spawn('node', [SERVER_PATH], { env, stdio: 'ignore' });
 
         // Wait for server to be ready
         let attempts = 0;
@@ -54,6 +51,34 @@ async function startTestServer() {
     });
 }
 
+async function createAuthSession() {
+    return new Promise((resolve, reject) => {
+        const payload = JSON.stringify({ userId: 'docker-integration-test' });
+        const req = http.request(`http://localhost:${TEST_PORT}/api/auth/session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+            },
+        }, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    authToken = parsed.token;
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        });
+        req.on('error', reject);
+        req.write(payload);
+        req.end();
+    });
+}
+
 async function stopTestServer() {
     if (serverProcess) {
         serverProcess.kill();
@@ -72,7 +97,8 @@ function apiRequest(endpoint, method = 'GET', body = null) {
             path: url.pathname,
             method: method,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
             }
         };
 
@@ -111,6 +137,7 @@ beforeAll(async () => {
         // Directory might already exist
     }
     await startTestServer();
+    await createAuthSession();
 }, 35000);
 
 afterAll(async () => {
@@ -650,4 +677,3 @@ EXPOSE 3001`);
         });
     });
 });
-

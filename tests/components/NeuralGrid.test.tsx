@@ -10,11 +10,15 @@ jest.mock('reactflow', () => {
     const React = require('react');
     return {
         __esModule: true,
-        default: ({ children, nodes, edges }: any) => (
+        default: ({ children, nodes, edges, onNodeClick }: any) => (
             <div data-testid="react-flow-mock" className="react-flow">
                 <div className="react-flow__controls" />
                 {nodes?.map((node: any) => (
-                    <div key={node.id} data-testid={`node-${node.id}`}>
+                    <div
+                        key={node.id}
+                        data-testid={`node-${node.id}`}
+                        onClick={(event: any) => onNodeClick?.(event, node)}
+                    >
                         {node.data?.label}
                         {node.data?.state && <span>{node.data.state}</span>}
                     </div>

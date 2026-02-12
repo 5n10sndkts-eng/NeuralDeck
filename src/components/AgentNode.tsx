@@ -14,6 +14,17 @@ interface AgentNodeProps {
 
 const AgentNode: React.FC<AgentNodeProps> = ({ data, isConnectable }) => {
     const { label, role, state, activeExecution, onExecutionClick } = data;
+    const agentAliasMap: Record<string, string> = {
+        analyst: 'analyst',
+        product_manager: 'pm',
+        architect: 'architect',
+        scrum_master: 'scrum-master',
+        developer: 'swarm',
+        security: 'security',
+        qa: 'qa',
+        user_input: 'user-input',
+    };
+    const agentAlias = agentAliasMap[data.agentId as string] || String(data.agentId || '');
 
     // State-based styling and animations
     const getStateStyles = (state: AgentNodeState) => {
@@ -60,6 +71,10 @@ const AgentNode: React.FC<AgentNodeProps> = ({ data, isConnectable }) => {
             />
 
             <motion.div
+                data-testid="agent-node"
+                data-agent={agentAlias}
+                data-agent-id={String(data.agentId || '')}
+                data-state={state}
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{
                     scale: 1,

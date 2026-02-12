@@ -4,8 +4,71 @@
  */
 
 const http = require('http');
+const path = require('path');
+const { spawn } = require('child_process');
 
-const BASE_URL = 'http://localhost:3001';
+const TEST_PORT = 3301;
+const BASE_URL = `http://localhost:${TEST_PORT}`;
+const SERVER_PATH = path.join(__dirname, '../server.cjs');
+let serverProcess = null;
+let authToken = '';
+
+const startTestServer = () => new Promise((resolve, reject) => {
+  serverProcess = spawn('node', [SERVER_PATH], {
+    env: { ...process.env, PORT: String(TEST_PORT) },
+    stdio: 'ignore',
+  });
+
+  let attempts = 0;
+  const interval = setInterval(() => {
+    attempts += 1;
+    const req = http.get(`${BASE_URL}/health`, (res) => {
+      if (res.statusCode === 200) {
+        clearInterval(interval);
+        resolve();
+      }
+    });
+    req.on('error', () => {
+      if (attempts > 40) {
+        clearInterval(interval);
+        reject(new Error('Test server failed to start'));
+      }
+    });
+    req.end();
+  }, 250);
+});
+
+const stopTestServer = async () => {
+  if (!serverProcess) return;
+  serverProcess.kill('SIGTERM');
+  serverProcess = null;
+};
+
+const createAuthSession = () => new Promise((resolve, reject) => {
+  const payload = JSON.stringify({ userId: 'command-security-test' });
+  const req = http.request(`${BASE_URL}/api/auth/session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload)
+    }
+  }, (res) => {
+    let responseData = '';
+    res.on('data', chunk => responseData += chunk);
+    res.on('end', () => {
+      try {
+        const body = JSON.parse(responseData);
+        authToken = body.token;
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+  req.on('error', reject);
+  req.write(payload);
+  req.end();
+});
 
 // Helper to make POST requests
 const postRequest = (path, body) => {
@@ -16,7 +79,8 @@ const postRequest = (path, body) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data)
+        'Content-Length': Buffer.byteLength(data),
+        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
       }
     }, (res) => {
       let responseData = '';
@@ -40,6 +104,15 @@ const postRequest = (path, body) => {
     req.end();
   });
 };
+
+beforeAll(async () => {
+  await startTestServer();
+  await createAuthSession();
+}, 30000);
+
+afterAll(async () => {
+  await stopTestServer();
+});
 
 describe('Command Security - Story 1.2', () => {
 

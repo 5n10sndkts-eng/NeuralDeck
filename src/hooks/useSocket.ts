@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { LogEntry, NeuralPhase } from './useNeuralAutonomy'; // Reuse types for now
 import { AgentProfile, AgentNodeState, VulnerabilityFinding, SecurityReport, VulnerabilitySeverity } from '../types';
-import { authService } from '../services/auth';
+import { authFetch, authService } from '../services/auth';
 
 // --- CONNECTION STATE TYPES (Story 6-6) ---
 
@@ -742,7 +742,7 @@ export const useSocket = () => {
     // Swarm execution controls (Story 4-2)
     const startSwarmExecution = useCallback(async (storyIds: string[]) => {
         try {
-            const response = await fetch('/api/swarm/execute', {
+            const response = await authFetch('/api/swarm/execute', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ storyIds }),
@@ -756,7 +756,7 @@ export const useSocket = () => {
 
     const cancelSwarmExecution = useCallback(async (executionId: string) => {
         try {
-            const response = await fetch(`/api/swarm/cancel/${executionId}`, {
+            const response = await authFetch(`/api/swarm/cancel/${executionId}`, {
                 method: 'POST',
             });
             return await response.json();
@@ -773,7 +773,7 @@ export const useSocket = () => {
     // Conflict control functions (Story 4-3)
     const resolveConflictAuto = useCallback(async (conflictId: string) => {
         try {
-            const response = await fetch(`/api/conflicts/${conflictId}/auto`, {
+            const response = await authFetch(`/api/conflicts/${conflictId}/auto`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
@@ -787,7 +787,7 @@ export const useSocket = () => {
 
     const resolveConflictManually = useCallback(async (conflictId: string, resolvedContent: string) => {
         try {
-            const response = await fetch(`/api/conflicts/${conflictId}/resolve`, {
+            const response = await authFetch(`/api/conflicts/${conflictId}/resolve`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ resolvedContent }),
@@ -801,7 +801,7 @@ export const useSocket = () => {
 
     const getConflicts = useCallback(async () => {
         try {
-            const response = await fetch('/api/conflicts');
+            const response = await authFetch('/api/conflicts');
             return await response.json();
         } catch (error) {
             console.error('[useSocket] Failed to get conflicts:', error);
@@ -816,7 +816,7 @@ export const useSocket = () => {
     // Security scan control functions (Story 5-3)
     const startSecurityScan = useCallback(async (targetPaths?: string[]) => {
         try {
-            const response = await fetch('/api/security/scan', {
+            const response = await authFetch('/api/security/scan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ targetPaths }),
@@ -830,7 +830,7 @@ export const useSocket = () => {
 
     const cancelSecurityScan = useCallback(async (scanId: string) => {
         try {
-            const response = await fetch(`/api/security/scan/${scanId}/cancel`, {
+            const response = await authFetch(`/api/security/scan/${scanId}/cancel`, {
                 method: 'POST',
             });
             return await response.json();
@@ -842,7 +842,7 @@ export const useSocket = () => {
 
     const getSecurityFindings = useCallback(async (scanId: string) => {
         try {
-            const response = await fetch(`/api/security/findings/${scanId}`);
+            const response = await authFetch(`/api/security/findings/${scanId}`);
             return await response.json();
         } catch (error) {
             console.error('[useSocket] Failed to get security findings:', error);
@@ -852,7 +852,7 @@ export const useSocket = () => {
 
     const getSecurityReport = useCallback(async (scanId: string) => {
         try {
-            const response = await fetch(`/api/security/report/${scanId}`);
+            const response = await authFetch(`/api/security/report/${scanId}`);
             return await response.json();
         } catch (error) {
             console.error('[useSocket] Failed to get security report:', error);
@@ -866,7 +866,7 @@ export const useSocket = () => {
         status: 'open' | 'reviewed' | 'fixed' | 'false_positive'
     ) => {
         try {
-            const response = await fetch(`/api/security/findings/${scanId}/${findingId}`, {
+            const response = await authFetch(`/api/security/findings/${scanId}/${findingId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status }),

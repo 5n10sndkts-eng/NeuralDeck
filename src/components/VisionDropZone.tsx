@@ -13,7 +13,12 @@ export const VisionDropZone: React.FC<Props> = ({ onDrop, children }) => {
     const [error, setError] = useState<string | null>(null);
     const [showConsentDialog, setShowConsentDialog] = useState(false);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
-    const { playSound } = useUI();
+    let playSound: ReturnType<typeof useUI>['playSound'] = () => undefined;
+    try {
+        playSound = useUI().playSound;
+    } catch {
+        // Allow isolated render in tests that don't provide UIContext.
+    }
 
     const handleDragEnter = useCallback((e: React.DragEvent) => {
         e.preventDefault();

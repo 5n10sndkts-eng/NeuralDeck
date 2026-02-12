@@ -13,10 +13,12 @@ const initSocket = (httpServer, options = {}) => {
     jwtLib = options.jwt;
     activeSessions = options.activeSessions;
     securityLogger = options.securityLogger;
+    const corsOrigins = options.corsOrigins || [];
+    const allowUnauthenticated = process.env.ALLOW_UNAUTHENTICATED_SOCKET === 'true';
 
     io = new Server(httpServer, {
         cors: {
-            origin: "*", // Allow all for now (Localhost dev)
+            origin: corsOrigins.length > 0 ? corsOrigins : false,
             methods: ["GET", "POST"]
         }
     });
@@ -28,9 +30,8 @@ const initSocket = (httpServer, options = {}) => {
                 const token = socket.handshake.auth.token;
                 
                 if (!token) {
-                    // Allow connection without auth in development
-                    if (process.env.NODE_ENV !== 'production') {
-                        console.log(`[SOCKET] Unauthenticated connection allowed (dev mode): ${socket.id}`);
+                    if (allowUnauthenticated) {
+                        console.log(`[SOCKET] Unauthenticated connection allowed by config: ${socket.id}`);
                         socket.userId = 'anonymous';
                         socket.authenticated = false;
                         return next();
@@ -86,9 +87,8 @@ const initSocket = (httpServer, options = {}) => {
                     });
                 }
                 
-                // Allow connection without auth in development
-                if (process.env.NODE_ENV !== 'production') {
-                    console.log(`[SOCKET] Auth error, allowing connection (dev mode): ${err.message}`);
+                if (allowUnauthenticated) {
+                    console.log(`[SOCKET] Auth error, allowing connection by config: ${err.message}`);
                     socket.userId = 'anonymous';
                     socket.authenticated = false;
                     return next();
@@ -183,4 +183,3 @@ stateManager.subscribe((delta) => {
 });
 
 module.exports = { initSocket, broadcast, broadcastDelta, stateManager };
-

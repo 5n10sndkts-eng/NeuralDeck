@@ -35,6 +35,8 @@ export type LlmProvider =
   | 'mock'
   | 'claude-cli'
   | 'gemini-cli'
+  | 'codex-cli'
+  | 'ollama-cli'
   | 'copilot-cli'
   | 'cursor-cli';
 

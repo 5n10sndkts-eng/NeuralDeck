@@ -1,6 +1,19 @@
 {
   "version": "1.0.0",
   "description": "Cached OpenCode session IDs for NeuralDeck agents",
-  "last_updated": null,
-  "sessions": {}
+  "last_updated": "2026-02-12T06:49:13.916Z",
+  "sessions": {
+    "red_teamer": {
+      "session_id": "ses_3b66a09d7ffekMyUzR7V990Xoo",
+      "opencode_agent": "red-team",
+      "created_at": "2026-02-11T23:40:02.022Z",
+      "type": "custom"
+    },
+    "architect": {
+      "session_id": "phase1-test-1770878953913",
+      "opencode_agent": "plan",
+      "created_at": "2026-02-12T06:49:13.916Z",
+      "type": "built-in"
+    }
+  }
 }

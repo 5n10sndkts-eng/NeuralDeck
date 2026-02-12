@@ -31,6 +31,7 @@ class MockSpeechRecognition {
   onend: (() => void) | null = null;
   
   start() {
+    (navigator.permissions as any)?.query?.({ name: 'microphone' });
     // Simulate permission request
     if (!(global as any).mockMicrophonePermissionGranted) {
       setTimeout(() => {

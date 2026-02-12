@@ -128,9 +128,11 @@ const TheConnections: React.FC<Props> = ({
                               <option value="copilot">GitHub Copilot API</option>
                           </optgroup>
                           <optgroup label="CLI Tools">
-                              <option value="cli">Local CLI (Ollama/Shell)</option>
+                              <option value="cli">Local CLI (Custom)</option>
                               <option value="claude-cli">Claude Code CLI</option>
                               <option value="gemini-cli">Gemini CLI</option>
+                              <option value="codex-cli">OpenAI Codex CLI</option>
+                              <option value="ollama-cli">Ollama CLI</option>
                               <option value="copilot-cli">GitHub Copilot CLI</option>
                               <option value="cursor-cli">Cursor Agent CLI</option>
                           </optgroup>
@@ -184,6 +186,9 @@ const TheConnections: React.FC<Props> = ({
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
                           <p className="text-[9px] text-gray-600 mt-1">Leave empty to use server-side environment variable.</p>
+                          {editingProfile.provider === 'gemini' && (
+                              <p className="text-[9px] text-gray-600 mt-1">Uses Gemini OpenAI-compatible endpoint by default.</p>
+                          )}
                       </div>
                   </div>
               )}
@@ -232,6 +237,42 @@ const TheConnections: React.FC<Props> = ({
                               value={editingProfile.cliCommand || 'gemini "{{prompt}}"'}
                               onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
                               placeholder='gemini "{{prompt}}"'
+                              className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
+                          />
+                      </div>
+                  </div>
+              )}
+
+              {/* OpenAI Codex CLI */}
+              {editingProfile.provider === 'codex-cli' && (
+                  <div className="space-y-4">
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded">
+                          <p className="text-[10px] text-emerald-300">Codex CLI uses the installed `codex` command. Ensure it is installed and authenticated.</p>
+                      </div>
+                      <div>
+                          <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
+                          <input
+                              value={editingProfile.cliCommand || 'codex "{{prompt}}"'}
+                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                              placeholder='codex "{{prompt}}"'
+                              className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
+                          />
+                      </div>
+                  </div>
+              )}
+
+              {/* Ollama CLI */}
+              {editingProfile.provider === 'ollama-cli' && (
+                  <div className="space-y-4">
+                      <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded">
+                          <p className="text-[10px] text-orange-300">Ollama CLI uses the installed `ollama` command. Ensure Ollama is running locally.</p>
+                      </div>
+                      <div>
+                          <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
+                          <input
+                              value={editingProfile.cliCommand || 'ollama run llama3 "{{prompt}}"'}
+                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                              placeholder='ollama run llama3 "{{prompt}}"'
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
                       </div>
@@ -391,7 +432,9 @@ const TheConnections: React.FC<Props> = ({
                                 <div key={profile.id} className={`p-3 rounded border transition-colors flex items-center justify-between ${activeProfileId === profile.id ? 'bg-cyber-cyan/10 border-cyber-cyan/50' : 'bg-white/5 border-white/5 hover:border-white/20'}`}>
                                     <div className="flex items-center gap-3">
                                         <div className={`p-2 rounded bg-black ${activeProfileId === profile.id ? 'text-cyber-cyan' : 'text-gray-500'}`}>
-                                            {profile.provider === 'cli' ? <Terminal size={16} /> : <Globe size={16} />}
+                                            {['cli', 'claude-cli', 'gemini-cli', 'codex-cli', 'ollama-cli', 'copilot-cli', 'cursor-cli'].includes(profile.provider)
+                                                ? <Terminal size={16} />
+                                                : <Globe size={16} />}
                                         </div>
                                         <div>
                                             <div className="text-sm font-bold text-gray-200">{profile.name}</div>

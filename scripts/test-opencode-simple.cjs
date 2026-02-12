@@ -26,8 +26,18 @@ async function testOpenCode() {
   log('║       OpenCode SDK Simple Connection Test                 ║', 'cyan');
   log('╚════════════════════════════════════════════════════════════╝', 'cyan');
 
-  const baseUrl = process.env.VITE_OPENCODE_URL || 'http://localhost:4096';
-  log(`\nOpenCode URL: ${baseUrl}\n`, 'yellow');
+  const baseUrlCandidates = Array.from(
+    new Set(
+      [
+        process.env.OPENCODE_URL,
+        process.env.VITE_OPENCODE_URL,
+        'http://127.0.0.1:4096',
+        'http://localhost:4096'
+      ].filter(Boolean)
+    )
+  );
+  let baseUrl = baseUrlCandidates[0];
+  log(`\nOpenCode URL candidates: ${baseUrlCandidates.join(', ')}\n`, 'yellow');
 
   let testsPassed = 0;
   let testsFailed = 0;
@@ -41,11 +51,31 @@ async function testOpenCode() {
 
     // Test 2: Create client
     log('\n[Test 2] Create client...', 'cyan');
-    const client = sdk.createOpencodeClient({ 
-      baseUrl,
-      directory: process.env.OPENCODE_PROJECT_PATH || process.cwd()
-    });
-    log('  ✓ Client created', 'green');
+    let client = null;
+    let connected = false;
+    let lastError = null;
+
+    for (const candidateUrl of baseUrlCandidates) {
+      const candidateClient = sdk.createOpencodeClient({
+        baseUrl: candidateUrl,
+        directory: process.env.OPENCODE_PROJECT_PATH || process.cwd()
+      });
+      try {
+        await candidateClient.path.get();
+        client = candidateClient;
+        baseUrl = candidateUrl;
+        connected = true;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (!connected || !client) {
+      throw lastError || new Error('No OpenCode endpoint responded');
+    }
+
+    log(`  ✓ Client created and connected (${baseUrl})`, 'green');
     testsPassed++;
 
     // Test 3: Get config

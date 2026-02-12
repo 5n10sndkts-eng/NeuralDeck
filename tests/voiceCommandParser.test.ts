@@ -6,7 +6,7 @@ describe('Voice Command Parser', () => {
     it('should parse navigation commands', () => {
       const cmd = parseVoiceCommand('show workspace', 1.0, 0.7);
       expect(cmd).not.toBeNull();
-      expect(cmd?.action).toBe('navigate:workspace');
+      expect(cmd?.action).toBe('navigation:workspace');
       expect(cmd?.confidence).toBeGreaterThanOrEqual(0.7);
     });
 
@@ -41,10 +41,10 @@ describe('Voice Command Parser', () => {
       expect(cmd?.action).toBe('system:help');
     });
 
-    it('should not match typos without exact substring', () => {
-      // Parser uses exact substring matching, not fuzzy matching
-      const cmd = parseVoiceCommand('shw workspce', 0.9, 0.7); // Typos
-      expect(cmd).toBeNull(); // No exact match for these typos
+    it('should recover common typos with fuzzy matching', () => {
+      const cmd = parseVoiceCommand('show workspce', 0.9, 0.7); // Missing 'a'
+      expect(cmd).not.toBeNull();
+      expect(cmd?.action).toBe('navigation:workspace');
     });
   });
 
@@ -81,10 +81,10 @@ describe('Voice Command Parser', () => {
 
     it('should format command without target', () => {
       const formatted = formatCommand({
-        action: 'navigate:workspace',
+        action: 'navigation:workspace',
         confidence: 0.85,
       });
-      expect(formatted).toContain('navigate');
+      expect(formatted).toContain('navigation');
       expect(formatted).toContain('workspace');
       expect(formatted).toContain('85%');
     });

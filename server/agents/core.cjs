@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { broadcast } = require('../services/socket.cjs');
+const providerAdapter = require('../services/providerAdapter.cjs');
 
 // --- RAG SERVICE (Story 6-1: Task 5) ---
 let ragService = null;
@@ -73,19 +74,35 @@ const AGENT_DEFINITIONS = {
 };
 
 // --- LLM INTERFACE (Server-Side) ---
-const sendChat = async (messages) => {
+const mapAgentIdForRouting = (agentId) => {
+    const map = {
+        analyst: 'analyst',
+        pm: 'product_manager',
+        architect: 'architect',
+        sm: 'scrum_master',
+        swarm: 'developer'
+    };
+
+    return map[agentId] || agentId;
+};
+
+const sendChat = async (messages, agentId = 'analyst') => {
     try {
-        // Call the local Fastify Unified Gateway
-        const response = await fetch('http://localhost:3001/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                messages,
-                config: { provider: 'vllm', baseUrl: 'http://localhost:8000/v1' } // Default to local
-            })
+        const routingAgentId = mapAgentIdForRouting(agentId);
+        const prompt = messages
+            .map((message) => `[${message.role.toUpperCase()}]\n${message.content}`)
+            .join('\n\n');
+
+        const routed = await providerAdapter.routeToAgent(prompt, routingAgentId, {
+            timeout: 120000
         });
-        const data = await response.json();
-        return data.choices?.[0]?.message?.content || "";
+
+        if (routed?.success && routed?.content) {
+            return routed.content;
+        }
+
+        // Fallback for unexpected provider responses
+        return routed?.content || routed?.error || "System Error: Empty model response";
     } catch (e) {
         console.error("LLM Error:", e);
         return "System Error: LLM Unreachable";
@@ -164,7 +181,7 @@ const runAgentCycle = async (agentId, contextFiles = [], options = {}) => {
 
     broadcast('agent:thought', { agent: def.name, text: "Analyzing context..." });
 
-    const responseText = await sendChat(messages);
+    const responseText = await sendChat(messages, agentId);
 
     // Parse JSON
     try {

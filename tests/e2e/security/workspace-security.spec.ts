@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../support/fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -12,10 +12,15 @@ const __dirname = path.dirname(__filename);
  * Validates that workspace validation prevents access to NeuralDeck source
  */
 test.describe('@security Workspace Security', () => {
-    const testWorkspacePath = path.join(os.tmpdir(), 'neuraldeck-e2e-test-workspace');
+    test.describe.configure({ mode: 'serial' });
+
+    let testWorkspacePath = '';
     const neuraldeckPath = path.resolve(__dirname, '../../..');
 
-    test.beforeAll(async () => {
+    test.beforeAll(async ({}, testInfo) => {
+        const projectSlug = testInfo.project.name.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
+        testWorkspacePath = path.join(os.tmpdir(), `neuraldeck-e2e-test-workspace-${projectSlug}-${testInfo.workerIndex}`);
+
         // Create test workspace
         if (!fs.existsSync(testWorkspacePath)) {
             fs.mkdirSync(testWorkspacePath, { recursive: true });

@@ -525,6 +525,30 @@ export interface OpenCodePromptResult {
   };
 }
 
+export interface OpenCodeSwarmResult {
+  success: boolean;
+  mode: 'broadcast' | 'consensus';
+  totalAgents: number;
+  successCount: number;
+  failureCount: number;
+  responses: Array<{
+    agentId: string;
+    success: boolean;
+    routing?: string;
+    fallbackUsed?: boolean;
+    content?: string;
+    provider?: string;
+    model?: string | null;
+    error?: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  consensus?: {
+    content: string;
+    count: number;
+    agents: string[];
+  } | null;
+}
+
 export const getOpenCodeHealth = async (): Promise<OpenCodeHealth> => {
   const res = await apiFetch(`${API_BASE}/opencode/health`);
   if (!res.ok) {
@@ -566,6 +590,25 @@ export const sendOpenCodePrompt = async (
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.error || 'Failed to send OpenCode prompt');
+  }
+
+  return res.json();
+};
+
+export const sendOpenCodeSwarm = async (
+  agentIds: string[],
+  prompt: string,
+  options?: { mode?: 'broadcast' | 'consensus'; timeout?: number; model?: string }
+): Promise<{ success: boolean; result: OpenCodeSwarmResult }> => {
+  const res = await apiFetch(`${API_BASE}/opencode/swarm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentIds, prompt, options })
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Failed to execute OpenCode swarm prompt');
   }
 
   return res.json();

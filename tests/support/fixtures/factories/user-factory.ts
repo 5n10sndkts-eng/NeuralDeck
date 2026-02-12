@@ -24,6 +24,7 @@ export type User = {
 
 export class UserFactory {
   private createdUsers: string[] = [];
+  private userApiAvailable = true;
   private request: APIRequestContext;
 
   constructor(request: APIRequestContext) {
@@ -53,26 +54,30 @@ export class UserFactory {
   async createUser(overrides: Partial<User> = {}): Promise<User> {
     const user = this.createUserData(overrides);
 
-    try {
-      // API call to create user (adjust endpoint as needed)
-      const response = await this.request.post('/api/users', {
-        data: user,
-      });
-
-      if (!response.ok()) {
-        throw new Error(`Failed to create user: ${response.status()}`);
-      }
-
-      const created = await response.json();
-      this.createdUsers.push(created.id || user.id);
-      return created;
-    } catch (error) {
-      // If API endpoint doesn't exist yet, return mock data
-      // Tests can still use the factory pattern
-      console.warn('User API endpoint not available, using mock data:', error);
+    if (!this.userApiAvailable) {
       this.createdUsers.push(user.id);
       return user;
     }
+
+    // API call to create user when endpoint exists; fallback only for missing route.
+    const response = await this.request.post('/api/users', {
+      data: user,
+      failOnStatusCode: false,
+    });
+
+    if (response.status() === 404) {
+      this.userApiAvailable = false;
+      this.createdUsers.push(user.id);
+      return user;
+    }
+
+    if (!response.ok()) {
+      throw new Error(`Failed to create user: ${response.status()}`);
+    }
+
+    const created = await response.json();
+    this.createdUsers.push(created.id || user.id);
+    return created;
   }
 
   /**
@@ -80,9 +85,16 @@ export class UserFactory {
    * Called automatically by fixture teardown
    */
   async cleanup(): Promise<void> {
+    if (!this.userApiAvailable) {
+      this.createdUsers = [];
+      return;
+    }
+
     for (const userId of this.createdUsers) {
       try {
-        await this.request.delete(`/api/users/${userId}`);
+        await this.request.delete(`/api/users/${userId}`, {
+          failOnStatusCode: false,
+        });
       } catch (error) {
         // Ignore cleanup errors (user may not exist)
         console.warn(`Failed to cleanup user ${userId}:`, error);

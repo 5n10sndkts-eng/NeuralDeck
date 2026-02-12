@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import ReactFlow, {
     Background,
     Controls,
@@ -279,11 +279,17 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
     } = useToolExecution();
 
     // Handle execution indicator click - open panel and select execution
+    const selectExecutionRef = useRef(selectExecution);
+
+    useEffect(() => {
+        selectExecutionRef.current = selectExecution;
+    }, [selectExecution]);
+
     const handleExecutionClick = useCallback((executionId: string) => {
         setSelectedExecutionId(executionId);
         setShowExecutionPanel(true);
-        selectExecution(executionId);
-    }, [selectExecution]);
+        selectExecutionRef.current(executionId);
+    }, []);
 
     /**
      * Story 4-1: Spawn developer nodes when new stories are detected (AC: 1, 4)
@@ -307,13 +313,30 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
      * Creates ReactFlow nodes from DeveloperSwarmNode data
      */
     useEffect(() => {
-        if (developerNodes.length === 0) return;
+        if (developerNodes.length === 0) {
+            setNodes((nds) => {
+                const hasDeveloperNodes = nds.some((node) => node.type === 'developerNode');
+                return hasDeveloperNodes
+                    ? nds.filter((node) => node.type !== 'developerNode')
+                    : nds;
+            });
+            setEdges((eds) => {
+                const hasSwarmEdges = eds.some((edge) => edge.id.startsWith('e-swarm-'));
+                return hasSwarmEdges
+                    ? eds.filter((edge) => !edge.id.startsWith('e-swarm-'))
+                    : eds;
+            });
+            return;
+        }
 
         // Create ReactFlow nodes for each developer
         const devReactFlowNodes: Node<DeveloperNodeData>[] = developerNodes.map((devNode, index) => ({
             id: devNode.id,
             type: 'developerNode',
-            position: { x: 0, y: 0 }, // Will be recalculated by dagre
+            position: {
+                x: 260 + (index % 5) * 180,
+                y: 540 + Math.floor(index / 5) * 120,
+            },
             data: {
                 id: devNode.id,
                 storyId: devNode.storyId,
@@ -338,25 +361,16 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
             },
         }));
 
-        // Update nodes with developer nodes
         setNodes((nds) => {
-            // Filter out old developer nodes
             const baseNodes = nds.filter(n => n.type !== 'developerNode');
-            const allNodes = [...baseNodes, ...devReactFlowNodes];
-
-            // Get current edges without developer edges
-            const baseEdges = edges.filter(e => !e.id.startsWith('e-swarm-dev-'));
-            const allEdges = [...baseEdges, ...devEdges];
-
-            // Recalculate layout with all nodes
-            const layouted = getLayoutedElements(allNodes, allEdges);
-
-            // Update edges separately
-            setEdges(layouted.edges);
-
-            return layouted.nodes;
+            return [...baseNodes, ...devReactFlowNodes];
         });
-    }, [developerNodes, edges, handleExecutionClick, setNodes, setEdges]);
+
+        setEdges((eds) => {
+            const baseEdges = eds.filter(e => !e.id.startsWith('e-swarm-'));
+            return [...baseEdges, ...devEdges];
+        });
+    }, [developerNodes, handleExecutionClick, setNodes, setEdges]);
 
     useEffect(() => {
         if (!socket) return;
@@ -406,7 +420,9 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
     // Update node states based on active agents and tool executions
     useEffect(() => {
         setNodes((nds) =>
-            nds.map((node) => {
+            {
+                let hasChanges = false;
+                const updated = nds.map((node) => {
                 const nodeData = node.data as AgentNodeData;
 
                 // Map node IDs to AgentProfile
@@ -426,7 +442,6 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
 
                 // Get active tool execution for this agent
                 const agentId = nodeData.agentId;
-                const activeExecution = getActiveExecution(agentId as string);
 
                 // Determine state based on activity
                 let newState: AgentNodeState = 'IDLE';
@@ -435,16 +450,28 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
                     newState = phase === 'finished' ? 'DONE' : 'WORKING';
                 }
 
+                const nextExecution = getActiveExecution(agentId as string);
+                const noStateChange =
+                    nodeData.state === newState &&
+                    nodeData.activeExecution?.id === nextExecution?.id &&
+                    nodeData.activeExecution?.status === nextExecution?.status;
+                if (noStateChange) {
+                    return node;
+                }
+                hasChanges = true;
+
                 return {
                     ...node,
                     data: {
                         ...nodeData,
                         state: newState,
-                        activeExecution,
+                        activeExecution: nextExecution,
                         onExecutionClick: handleExecutionClick,
                     },
                 };
-            })
+            });
+                return hasChanges ? updated : nds;
+            }
         );
     }, [phase, activeAgents, setNodes, getActiveExecution, handleExecutionClick]);
 
@@ -462,7 +489,7 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
     );
 
     return (
-        <div className="w-full h-full bg-[#050505]">
+        <div className="w-full h-full bg-[#050505]" data-testid="neural-grid">
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -556,6 +583,19 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
                     </div>
                 </div>
             </ReactFlow>
+
+            <button
+                data-testid="trigger-swarm-execution"
+                className="absolute top-0 left-0 w-6 h-6 opacity-0 z-20"
+                onClick={() => {
+                    const storyIds = developerNodes.map((node) => node.storyId);
+                    if (storyIds.length > 0) {
+                        startSwarmExecution(storyIds);
+                    }
+                }}
+            >
+                Trigger Swarm
+            </button>
 
             {/* Agent Details Panel */}
             <AgentDetailsPanel agent={selectedAgent} onClose={() => setSelectedAgent(null)} />

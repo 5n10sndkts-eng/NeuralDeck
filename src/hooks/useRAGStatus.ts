@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { authFetch } from '../services/auth';
 
 export interface RAGStats {
     rag: {
@@ -61,7 +62,7 @@ interface UseRAGStatusReturn {
     triggerReindex: () => Promise<boolean>;
 }
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
 const POLL_INTERVAL = 5000; // 5 seconds
 
 export function useRAGStatus(): UseRAGStatusReturn {
@@ -72,7 +73,7 @@ export function useRAGStatus(): UseRAGStatusReturn {
     // Task 7.2: Fetch RAG stats from API
     const fetchStats = useCallback(async () => {
         try {
-            const response = await fetch(`${API_BASE}/api/rag/stats`);
+            const response = await authFetch(`${API_BASE}/rag/stats`);
 
             if (!response.ok) {
                 if (response.status === 503) {
@@ -106,7 +107,7 @@ export function useRAGStatus(): UseRAGStatusReturn {
     const search = useCallback(async (query: string, k = 5): Promise<RAGSearchResponse | null> => {
         try {
             const params = new URLSearchParams({ q: query, k: String(k) });
-            const response = await fetch(`${API_BASE}/api/rag/search?${params}`);
+            const response = await authFetch(`${API_BASE}/rag/search?${params}`);
 
             if (!response.ok) {
                 throw new Error(`Search failed: HTTP ${response.status}`);
@@ -122,7 +123,7 @@ export function useRAGStatus(): UseRAGStatusReturn {
     // Task 7.5: Trigger reindex
     const triggerReindex = useCallback(async (): Promise<boolean> => {
         try {
-            const response = await fetch(`${API_BASE}/api/rag/reindex`, {
+            const response = await authFetch(`${API_BASE}/rag/reindex`, {
                 method: 'POST'
             });
 

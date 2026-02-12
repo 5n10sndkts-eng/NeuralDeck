@@ -3,16 +3,17 @@
 
 const CONFIG = {
     FREQ: {
-        DRONE_IDLE: 60,
-        DRONE_CODING: 65,
-        DRONE_ALERT: 45,
-        FILTER_IDLE: 200,
-        FILTER_CODING: 400,
-        FILTER_ALERT: 800,
+        // Shift core tones out of low-end to remove rumble/bass.
+        DRONE_IDLE: 220,
+        DRONE_CODING: 280,
+        DRONE_ALERT: 360,
+        FILTER_IDLE: 180,
+        FILTER_CODING: 260,
+        FILTER_ALERT: 380,
         LFO_IDLE: 0.1,
         LFO_CODING: 0.2,
         LFO_ALERT: 4.0,
-        LFO_GAIN: 50
+        LFO_GAIN: 20
     },
     TIMING: {
         RAMP_SLOW: 2,
@@ -23,6 +24,8 @@ const CONFIG = {
 };
 
 export class AudioEngine {
+    // Master kill-switch: audio is intentionally disabled app-wide.
+    private readonly audioDisabled: boolean = true;
     private ctx: AudioContext | null = null;
     private droneOsc: OscillatorNode | null = null;
     private droneGain: GainNode | null = null;
@@ -38,6 +41,10 @@ export class AudioEngine {
     }
 
     public async init(volume: number = 0.4, mood: string = 'focus') {
+        if (this.audioDisabled) {
+            this.isMuted = true;
+            return;
+        }
         if (this.ctx) {
             if (this.droneGain) this.droneGain.gain.value = volume * 0.25;
             return;
@@ -56,23 +63,29 @@ export class AudioEngine {
     }
 
     public setMuted(muted: boolean) {
+        if (this.audioDisabled) {
+            this.isMuted = true;
+            return;
+        }
         this.isMuted = muted;
         if (muted) this.stop();
         else this.start();
     }
 
     public setAgentState(state: 'idle' | 'working' | 'swarm') {
+        if (this.audioDisabled) return;
         if (!this.ctx || !this.droneOsc) return;
         // Adjust frequency slightly based on activity level
         const now = this.ctx.currentTime;
         let targetFreq = CONFIG.FREQ.DRONE_IDLE;
         if (state === 'working') targetFreq = CONFIG.FREQ.DRONE_CODING;
-        if (state === 'swarm') targetFreq = CONFIG.FREQ.DRONE_CODING + 5;
+        if (state === 'swarm') targetFreq = CONFIG.FREQ.DRONE_CODING + 20;
 
         this.droneOsc.frequency.exponentialRampToValueAtTime(targetFreq, now + 1);
     }
 
     private buildSynth() {
+        if (this.audioDisabled) return;
         if (!this.ctx) return;
 
         // 1. Drone
@@ -82,7 +95,7 @@ export class AudioEngine {
 
         // 2. Filter
         this.filter = this.ctx.createBiquadFilter();
-        this.filter.type = 'lowpass';
+        this.filter.type = 'highpass';
         this.filter.frequency.value = CONFIG.FREQ.FILTER_IDLE;
 
         // 3. LFO
@@ -111,6 +124,7 @@ export class AudioEngine {
     }
 
     public setMode(mode: 'IDLE' | 'CODING' | 'ALERT') {
+        if (this.audioDisabled) return;
         if (!this.ctx || !this.droneOsc || !this.filter || !this.lfo) return;
 
         const now = this.ctx.currentTime;
@@ -136,6 +150,10 @@ export class AudioEngine {
     }
 
     public async start() {
+        if (this.audioDisabled) {
+            this.isMuted = true;
+            return;
+        }
         if (!this.ctx) await this.init();
 
         if (this.ctx && this.droneGain) {
@@ -146,6 +164,10 @@ export class AudioEngine {
     }
 
     public stop() {
+        if (this.audioDisabled) {
+            this.isMuted = true;
+            return;
+        }
         if (this.ctx && this.droneGain) {
             this.droneGain.gain.setTargetAtTime(0, this.ctx.currentTime, CONFIG.TIMING.FADE);
             setTimeout(() => this.ctx?.suspend(), CONFIG.TIMING.SUSPEND);
@@ -154,6 +176,10 @@ export class AudioEngine {
     }
 
     public async toggle() {
+        if (this.audioDisabled) {
+            this.isMuted = true;
+            return true;
+        }
         if (this.isMuted) await this.start();
         else this.stop();
         return this.isMuted;

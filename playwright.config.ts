@@ -15,9 +15,10 @@ import path from 'path';
 export default defineConfig({
   // Test directory
   testDir: './tests/e2e',
+  testMatch: ['**/*.spec.ts'],
 
-  // Fully parallel execution within test files
-  fullyParallel: true,
+  // Shared backend state makes strict parallelism flaky; run tests deterministically.
+  fullyParallel: false,
 
   // Prevent .only() from blocking CI
   forbidOnly: !!process.env.CI,
@@ -26,7 +27,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
 
   // Worker configuration
-  workers: process.env.CI ? 1 : undefined, // Serial in CI for stability, parallel locally
+  workers: 1,
 
   // Global test timeout: 60 seconds
   timeout: 60 * 1000,
@@ -76,11 +77,19 @@ export default defineConfig({
     },
   ],
 
-  // Web server configuration (auto-start dev server)
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  // Web server configuration (auto-start backend + frontend)
+  webServer: [
+    {
+      command: 'env -u NO_COLOR -u FORCE_COLOR NEURAL_RATE_LIMIT_MAX=10000 node server.cjs',
+      url: 'http://localhost:3001/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+    },
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:5173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+    },
+  ],
 });

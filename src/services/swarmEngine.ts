@@ -10,6 +10,7 @@ import { AgentNodeState, ChatMessage, LlmConfig, AgentAction } from '../types';
 import { StoryMetadata } from '../hooks/useStoryWatcher';
 import { DeveloperSwarmNode } from '../hooks/useSwarm';
 import { sendChat, readFile, writeFile } from './api';
+import { authFetch } from './auth';
 import { AGENT_DEFINITIONS } from './agent';
 
 // --- FILE LOCK INTEGRATION (AC: 3) ---
@@ -25,7 +26,7 @@ export interface FileLock {
  */
 export const checkFileLock = async (filePath: string): Promise<FileLock | null> => {
     try {
-        const response = await fetch(`/api/files/lock/${encodeURIComponent(filePath)}`);
+        const response = await authFetch(`/api/files/lock/${encodeURIComponent(filePath)}`);
         if (response.ok) {
             const data = await response.json();
             return data.lock || null;
@@ -42,7 +43,7 @@ export const checkFileLock = async (filePath: string): Promise<FileLock | null> 
  */
 export const acquireFileLock = async (filePath: string, agentId: string): Promise<boolean> => {
     try {
-        const response = await fetch('/api/files/lock', {
+        const response = await authFetch('/api/files/lock', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filePath, agentId }),
@@ -59,7 +60,7 @@ export const acquireFileLock = async (filePath: string, agentId: string): Promis
  */
 export const releaseFileLock = async (filePath: string, agentId: string): Promise<boolean> => {
     try {
-        const response = await fetch('/api/files/unlock', {
+        const response = await authFetch('/api/files/unlock', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filePath, agentId }),
@@ -76,7 +77,7 @@ export const releaseFileLock = async (filePath: string, agentId: string): Promis
  */
 export const getAllFileLocks = async (): Promise<FileLock[]> => {
     try {
-        const response = await fetch('/api/files/locks');
+        const response = await authFetch('/api/files/locks');
         if (response.ok) {
             const data = await response.json();
             return data.locks || [];

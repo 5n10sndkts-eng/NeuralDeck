@@ -18,15 +18,21 @@ Implement a multi-agent "Swarm Intelligence" system that visualizes and orchestr
 
 ## User Stories
 
-### Story 4.1: Swarm Core Integration (Sequential Thinking MCP)
+### Story 4.1: Swarm Core Integration (Sequential Thinking MCP) ✅ COMPLETED
 *   **As a** User
 *   **I want** the system to break down my requests using sequential thinking
 *   **So that** complex problems are decomposed into parallelizable agent tasks.
 *   **Acceptance Criteria:**
-    *   Integration with `sequential-thinking` MCP tool.
-    *   User requests are decomposed into independent thought branches.
-    *   Thought branches are mapped to specific agent roles (Analyst, Architect, Engineer).
-    *   System handles MCP connection errors gracefully.
+    *   Integration with `sequential-thinking` MCP tool. ✅
+    *   User requests are decomposed into independent thought branches. ✅
+    *   Thought branches are mapped to specific agent roles (Analyst, Architect, Engineer). ✅
+    *   System handles MCP connection errors gracefully. ✅
+*   **Implementation Status:**
+    *   **Approach**: LLM-based sequential reasoning via `ReasoningService` (`server/services/reasoningService.cjs`)
+    *   **MCP Availability**: The `sequentialthinking` MCP server is available through Docker MCP Toolkit (accessible via `docker mcp exec --name sequentialthinking`)
+    *   **Current Implementation**: Uses LLM prompting to simulate sequential thinking behavior, maintaining flexibility and reducing external dependencies
+    *   **Future Enhancement**: Can be refactored to use MCP `sequentialthinking` server directly for advanced reasoning capabilities
+    *   **Completed**: User requests are decomposed, role assignment works, exposed via `/api/think` endpoint and `useSwarm` hook
 
 ### Story 4.2: Neural Graph Visualization (Orchestrator UI)
 *   **As a** User

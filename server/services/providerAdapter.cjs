@@ -18,6 +18,7 @@ const path = require('path');
 
 const execAsync = promisify(exec);
 const openCodeService = require('./opencodeCLI.cjs');
+const openCodeAdapter = require('./openCodeAdapter.cjs');
 
 class ProviderAdapter {
   constructor() {
@@ -25,6 +26,7 @@ class ProviderAdapter {
     this.routingConfigPath = path.join(process.cwd(), '.neuraldeck', 'routing-config.json');
     this.config = null;
     this.routingConfig = null;
+    this.useOpenCodeSDK = process.env.OPENCODE_USE_SDK === '1';
   }
 
   /**
@@ -51,15 +53,16 @@ class ProviderAdapter {
    * @private
    */
   getDefaultConfig() {
+    const defaultOllamaModel = process.env.OLLAMA_DEFAULT_MODEL || 'deepseek';
     return {
       providers: {
         claude: { enabled: true, default: 'sonnet' },
         gemini: { enabled: true, default: 'flash' },
-        ollama: { enabled: true, default: 'deepseek' }
+        ollama: { enabled: true, default: defaultOllamaModel }
       },
       agent: {
         architect: { provider: 'claude', model: 'sonnet' },
-        developer: { provider: 'ollama', model: 'deepseek' },
+        developer: { provider: 'ollama', model: defaultOllamaModel },
         analyst: { provider: 'gemini', model: 'pro' },
         qa_engineer: { provider: 'claude', model: 'sonnet' },
         pm: { provider: 'claude', model: 'sonnet' }
@@ -73,7 +76,8 @@ class ProviderAdapter {
    * @param {string} model - Model variant (sonnet, opus)
    * @returns {Promise<Object>} Response
    */
-  async callClaude(prompt, model = 'sonnet') {
+  async callClaude(prompt, model = 'sonnet', options = {}) {
+    const timeout = options.timeout || 60000;
     try {
       // Escape quotes in prompt
       const escapedPrompt = prompt.replace(/"/g, '\\"');
@@ -82,7 +86,7 @@ class ProviderAdapter {
       // User may need to install it separately
       const command = `echo "${escapedPrompt}" | claude chat`;
       const { stdout, stderr } = await execAsync(command, {
-        timeout: 60000, // 60 second timeout
+        timeout,
         maxBuffer: 10 * 1024 * 1024 // 10MB buffer
       });
       
@@ -114,7 +118,8 @@ class ProviderAdapter {
    * @param {string} model - Model variant (pro, flash)
    * @returns {Promise<Object>} Response
    */
-  async callGemini(prompt, model = 'flash') {
+  async callGemini(prompt, model = 'flash', options = {}) {
+    const timeout = options.timeout || 60000;
     try {
       const escapedPrompt = prompt.replace(/"/g, '\\"');
       
@@ -129,7 +134,7 @@ class ProviderAdapter {
       // Note: This assumes gemini CLI is installed
       const command = `gemini generate --model ${modelId} "${escapedPrompt}"`;
       const { stdout, stderr } = await execAsync(command, {
-        timeout: 60000,
+        timeout,
         maxBuffer: 10 * 1024 * 1024,
         env: { 
           ...process.env, 
@@ -165,9 +170,13 @@ class ProviderAdapter {
    * @param {string} model - Model name (deepseek, llama3, codellama)
    * @returns {Promise<Object>} Response
    */
-  async callOllama(prompt, model = 'deepseek-coder:33b') {
+  async callOllama(prompt, model = 'deepseek-coder:33b', options = {}) {
+    const timeout = options.timeout || 60000;
+    const allowModelRetry = options.retryModelLookup !== false;
     try {
       const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
       
       const response = await fetch(`${ollamaUrl}/v1/chat/completions`, {
         method: 'POST',
@@ -176,10 +185,34 @@ class ProviderAdapter {
           model,
           messages: [{ role: 'user', content: prompt }],
           stream: false
-        })
-      });
+        }),
+        signal: controller.signal
+      }).finally(() => clearTimeout(timer));
       
       if (!response.ok) {
+        // If the configured model is missing, retry once with the first installed Ollama model.
+        if (allowModelRetry && response.status === 404) {
+          try {
+            const tagsController = new AbortController();
+            const tagsTimer = setTimeout(() => tagsController.abort(), Math.min(timeout, 10000));
+            const tagsResponse = await fetch(`${ollamaUrl}/api/tags`, {
+              signal: tagsController.signal
+            }).finally(() => clearTimeout(tagsTimer));
+
+            if (tagsResponse.ok) {
+              const tags = await tagsResponse.json();
+              const fallbackModel = tags?.models?.[0]?.name;
+              if (fallbackModel && fallbackModel !== model) {
+                return await this.callOllama(prompt, fallbackModel, {
+                  ...options,
+                  retryModelLookup: false
+                });
+              }
+            }
+          } catch {
+            // Ignore lookup failures and fall through to original HTTP error.
+          }
+        }
         throw new Error(`Ollama HTTP ${response.status}: ${response.statusText}`);
       }
       
@@ -209,18 +242,19 @@ class ProviderAdapter {
    * @param {string} agentType - Agent type (aider, code-interpreter)
    * @returns {Promise<Object>} Response
    */
-  async callTerminalAgent(prompt, agentType = 'aider') {
+  async callTerminalAgent(prompt, agentType = 'aider', options = {}) {
+    const timeout = options.timeout;
     const adapters = {
       'aider': async (p) => {
         const escapedPrompt = p.replace(/"/g, '\\"');
         const command = `echo "${escapedPrompt}" | aider --no-git --message`;
-        const { stdout } = await execAsync(command, { timeout: 120000 });
+        const { stdout } = await execAsync(command, { timeout: timeout || 120000 });
         return stdout.trim();
       },
       'code-interpreter': async (p) => {
         const escapedPrompt = p.replace(/"/g, '\\"');
         const command = `python -m code_interpreter execute "${escapedPrompt}"`;
-        const { stdout } = await execAsync(command, { timeout: 60000 });
+        const { stdout } = await execAsync(command, { timeout: timeout || 60000 });
         return stdout.trim();
       }
     };
@@ -257,7 +291,7 @@ class ProviderAdapter {
    * @param {string} agent - Agent ID
    * @returns {Promise<Object>} Response
    */
-  async routePrompt(prompt, agent) {
+  async routePrompt(prompt, agent, options = {}) {
     const config = await this.loadConfig();
     const agentConfig = this.getAgentConfig(agent, config);
     
@@ -268,16 +302,16 @@ class ProviderAdapter {
     
     switch (provider) {
       case 'claude':
-        return await this.callClaude(prompt, model);
+        return await this.callClaude(prompt, model, options);
       case 'gemini':
-        return await this.callGemini(prompt, model);
+        return await this.callGemini(prompt, model, options);
       case 'ollama':
-        return await this.callOllama(prompt, model);
+        return await this.callOllama(prompt, model, options);
       case 'terminal-agents':
-        return await this.callTerminalAgent(prompt, agentConfig.terminalAgent || 'aider');
+        return await this.callTerminalAgent(prompt, agentConfig.terminalAgent || 'aider', options);
       default:
         console.warn(`Unknown provider: ${provider}, falling back to claude`);
-        return await this.callClaude(prompt, 'sonnet');
+        return await this.callClaude(prompt, 'sonnet', options);
     }
   }
 
@@ -330,26 +364,67 @@ class ProviderAdapter {
   async routeToAgent(prompt, agentId, options = {}) {
     const routing = await this.loadRoutingConfig();
     const useOpenCode = await this.shouldUseOpenCode(agentId);
+    const openCodeTimeout = options.timeout || routing?.rules?.opencode_timeout_ms || 120000;
+    const localTimeout = options.timeout || routing?.rules?.local_timeout_ms || 60000;
 
     if (useOpenCode) {
       try {
-        const response = await openCodeService.sendToNeuralDeckAgent(agentId, prompt, {
-          timeout: options.timeout || routing?.rules?.opencode_timeout_ms || 120000,
-          model: options.model
-        });
+        const model = options.model;
+        let response;
+        let transport = 'cli';
+        let sdkError = null;
+
+        if (this.useOpenCodeSDK) {
+          try {
+            const init = await openCodeAdapter.initialize();
+            if (!init?.success) {
+              throw new Error(init?.error || 'OpenCode SDK initialization failed');
+            }
+
+            const sdkResponse = await openCodeAdapter.sendPrompt(agentId, prompt, { timeout: openCodeTimeout, model });
+            if (!sdkResponse?.success) {
+              throw new Error(sdkResponse?.error || 'OpenCode SDK prompt failed');
+            }
+
+            response = {
+              content: sdkResponse?.response?.content || JSON.stringify(sdkResponse?.response || {}),
+              opencodeAgent: agentId,
+              sessionId: sdkResponse?.sessionId || null,
+              cachedSession: false,
+              model
+            };
+            transport = 'sdk';
+          } catch (error) {
+            sdkError = error.message;
+          }
+        }
+
+        if (!response) {
+          response = await openCodeService.sendToNeuralDeckAgent(agentId, prompt, {
+            timeout: openCodeTimeout,
+            model
+          });
+          transport = 'cli';
+        }
+
+        const normalizedContent = String(response?.content || '').trim();
+        const hasContent = normalizedContent.length > 0;
 
         return {
-          success: true,
+          success: hasContent,
           routing: 'opencode',
           fallbackUsed: false,
-          content: response.content,
+          content: response?.content || '',
           provider: 'opencode',
           model: response.model || options.model || null,
+          error: hasContent ? undefined : 'OpenCode returned empty response',
           metadata: {
             agentId,
             opencodeAgent: response.opencodeAgent,
             sessionId: response.sessionId || null,
-            cachedSession: response.cachedSession || false
+            cachedSession: response.cachedSession || false,
+            transport,
+            sdkFallbackReason: sdkError
           }
         };
       } catch (error) {
@@ -361,17 +436,22 @@ class ProviderAdapter {
             error: error.message,
             provider: 'opencode'
           };
-        }
+      }
 
-        const fallbackResponse = await this.routePrompt(prompt, agentId);
-        return {
-          success: !!fallbackResponse?.success,
+        const fallbackResponse = await this.routePrompt(prompt, agentId, { timeout: localTimeout });
+      const fallbackContent = String(fallbackResponse?.response || '').trim();
+      const fallbackSuccess = !!fallbackResponse?.success && fallbackContent.length > 0;
+      return {
+          success: fallbackSuccess,
           routing: fallbackResponse?.provider || 'local',
           fallbackUsed: true,
           fallbackReason: error.message,
           content: fallbackResponse?.response || '',
           provider: fallbackResponse?.provider || 'local',
           model: fallbackResponse?.model || null,
+          error: fallbackSuccess
+            ? undefined
+            : (fallbackResponse?.error || 'Fallback provider returned empty response'),
           notifyUI: !!routing?.fallback_notify_ui,
           metadata: {
             agentId,
@@ -381,18 +461,127 @@ class ProviderAdapter {
       }
     }
 
-    const localResponse = await this.routePrompt(prompt, agentId);
+    const localResponse = await this.routePrompt(prompt, agentId, { timeout: localTimeout });
+    const localContent = String(localResponse?.response || '').trim();
+    const localSuccess = !!localResponse?.success && localContent.length > 0;
     return {
-      success: !!localResponse?.success,
+      success: localSuccess,
       routing: localResponse?.provider || 'local',
       fallbackUsed: false,
       content: localResponse?.response || '',
       provider: localResponse?.provider || 'local',
       model: localResponse?.model || null,
+      error: localSuccess
+        ? undefined
+        : (localResponse?.error || 'Local provider returned empty response'),
       metadata: {
         agentId,
         originalRouting: 'local'
       }
+    };
+  }
+
+  /**
+   * Run a swarm prompt across multiple agents.
+   * Modes:
+   * - broadcast: return all agent responses
+   * - consensus: return all responses + best-effort consensus pick
+   * @param {string} prompt - Prompt text
+   * @param {string[]} agentIds - NeuralDeck agent IDs
+   * @param {Object} options - Swarm options
+   * @returns {Promise<Object>} Aggregated swarm result
+   */
+  async routeSwarm(prompt, agentIds = [], options = {}) {
+    const mode = options.mode || 'broadcast';
+    const timeout = options.timeout || 120000;
+    const model = options.model;
+
+    if (!Array.isArray(agentIds) || agentIds.length === 0) {
+      return {
+        success: false,
+        mode,
+        error: 'agentIds must be a non-empty array',
+        responses: []
+      };
+    }
+
+    const uniqueAgents = [...new Set(agentIds)];
+    const settled = await Promise.all(
+      uniqueAgents.map(async (agentId) => {
+        try {
+          const result = await this.routeToAgent(prompt, agentId, { timeout, model });
+          return { agentId, ...result };
+        } catch (error) {
+          return {
+            agentId,
+            success: false,
+            routing: 'error',
+            fallbackUsed: false,
+            provider: 'none',
+            error: error.message
+          };
+        }
+      })
+    );
+
+    const normalizedResponses = settled.map((entry) => {
+      const content = String(entry?.content || '').trim();
+      if (entry?.success && content.length === 0) {
+        return {
+          ...entry,
+          success: false,
+          error: entry.error || 'Provider returned empty response'
+        };
+      }
+      return entry;
+    });
+
+    const successful = normalizedResponses.filter((entry) => !!entry.success);
+    const failed = normalizedResponses.filter((entry) => !entry.success);
+
+    if (mode !== 'consensus') {
+      return {
+        success: successful.length > 0,
+        mode: 'broadcast',
+        totalAgents: uniqueAgents.length,
+        successCount: successful.length,
+        failureCount: failed.length,
+        responses: normalizedResponses
+      };
+    }
+
+    // Best-effort consensus: pick the most frequent normalized response body.
+    const frequency = new Map();
+    for (const entry of successful) {
+      const key = String(entry.content || '').trim().toLowerCase();
+      if (!key) continue;
+      const bucket = frequency.get(key) || { count: 0, sample: entry.content, agents: [] };
+      bucket.count += 1;
+      bucket.agents.push(entry.agentId);
+      frequency.set(key, bucket);
+    }
+
+    let consensus = null;
+    for (const bucket of frequency.values()) {
+      if (!consensus || bucket.count > consensus.count) {
+        consensus = bucket;
+      }
+    }
+
+    return {
+      success: successful.length > 0,
+      mode: 'consensus',
+      totalAgents: uniqueAgents.length,
+      successCount: successful.length,
+      failureCount: failed.length,
+      responses: normalizedResponses,
+      consensus: consensus
+        ? {
+            content: consensus.sample,
+            count: consensus.count,
+            agents: consensus.agents
+          }
+        : null
     };
   }
 

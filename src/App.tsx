@@ -16,7 +16,6 @@ import { useSocket } from './hooks/useSocket';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { MainLayout } from './components/MainLayout';
 import { CyberDock } from './components/CyberDock';
-import { TheOrchestrator } from './components/TheOrchestrator';
 import { WorkspaceManager } from './components/WorkspaceManager';
 import { OpenCodeStatus } from './components/OpenCodeStatus';
 import { AgentChat } from './components/AgentChat';
@@ -246,7 +245,7 @@ const AppContent: React.FC = () => {
                 // Execute command
                 const [category, action] = command.action.split(':');
 
-                if (category === 'navigation') {
+                if (category === 'navigation' || category === 'navigate') {
                     const viewMap: Record<string, ViewMode> = {
                         workspace: 'workspace',
                         construct: 'construct',
@@ -319,6 +318,11 @@ const AppContent: React.FC = () => {
 
     // Show workspace manager on first run if no workspace selected
     useEffect(() => {
+        const isAutomatedBrowser = typeof navigator !== 'undefined' && navigator.webdriver;
+        if (isAutomatedBrowser) {
+            return;
+        }
+
         if (!isLoadingWorkspace && !currentWorkspace) {
             // Small delay to allow UI to render
             const timer = setTimeout(() => {
@@ -608,7 +612,14 @@ const AppContent: React.FC = () => {
                     </div>
                 );
 
-            case 'orchestrator': return <TheOrchestrator />;
+            case 'orchestrator':
+                return (
+                    <ChunkErrorBoundary>
+                        <Suspense fallback={<GraphLoadingSkeleton />}>
+                            <NeuralGrid phase={phase} activeAgents={activeAgents} files={files} />
+                        </Suspense>
+                    </ChunkErrorBoundary>
+                );
 
             case 'board': 
                 return (

@@ -1,6 +1,6 @@
 
 import { ChatMessage, AgentProfile, LlmConfig, NeuralPhase } from '../types';
-import { sendChat, readFile } from './api';
+import { sendChat, readFile, sendOpenCodePrompt, queryContext } from './api';
 
 // --- REAL PROMPTS FOR AUTONOMOUS AGENTS ---
 export const AGENT_DEFINITIONS: Record<AgentProfile, { name: string, role: string, systemPrompt: string, color: string, description: string }> = {
@@ -258,8 +258,27 @@ export const AGENT_DEFINITIONS: Record<AgentProfile, { name: string, role: strin
 };
 
 // --- LLM INTERFACE ---
+const OPENCODE_ROUTED_AGENTS = new Set<AgentProfile>([
+    'analyst',
+    'product_manager',
+    'ux_designer',
+    'architect',
+    'scrum_master',
+    'qa_engineer',
+    'sec_auditor',
+    'devops',
+    'red_teamer',
+    'merger',
+    'pen_tester',
+    'vuln_scanner',
+    'code_auditor'
+]);
 
-import { queryContext } from './api';
+const buildPromptFromMessages = (messages: ChatMessage[]): string => {
+    return messages
+        .map((message) => `[${message.role.toUpperCase()}]\n${message.content}`)
+        .join('\n\n');
+};
 
 export const runAgentCycle = async (
     agentId: AgentProfile,
@@ -317,7 +336,23 @@ export const runAgentCycle = async (
 
     try {
         onLog("Querying Neural Model...", 'thought');
-        const response = await sendChat(messages, llmConfig);
+        let response: ChatMessage;
+
+        if (OPENCODE_ROUTED_AGENTS.has(agentId)) {
+            const composedPrompt = buildPromptFromMessages(messages);
+            const openCodeResponse = await sendOpenCodePrompt(agentId, composedPrompt, {
+                model: llmConfig?.model || undefined
+            });
+            response = {
+                role: 'assistant',
+                content: openCodeResponse?.result?.content || '',
+                timestamp: Date.now(),
+                agentId
+            };
+        } else {
+            response = await sendChat(messages, llmConfig);
+        }
+
         const text = response.content || "";
 
         let action = null;
