@@ -9,6 +9,29 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   return authFetch(url, options);
 }
 
+async function safeReadJson(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+function extractAssistantContent(data: any): string | null {
+  const maybe = data?.choices?.[0]?.message?.content
+    ?? data?.choices?.[0]?.delta?.content
+    ?? data?.choices?.[0]?.text
+    ?? data?.content
+    ?? data?.message
+    ?? data?.result;
+
+  if (typeof maybe !== 'string') return null;
+  const trimmed = maybe.trim();
+  return trimmed ? trimmed : null;
+}
+
 // --- MCP METHODS ---
 export const getMCPTools = async () => {
   try {
@@ -97,11 +120,47 @@ export const readFile = async (filePath: string, workspaceId?: string): Promise<
 };
 
 export const writeFile = async (filePath: string, content: string, workspaceId?: string): Promise<void> => {
-  await apiFetch(`${API_BASE}/write`, {
+  const res = await apiFetch(`${API_BASE}/write`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filePath, content, workspaceId }),
   });
+
+  if (!res.ok) {
+    const data = await safeReadJson(res);
+    throw new Error(data?.error || 'Failed to write file');
+  }
+};
+
+export type FileWriteEncoding = 'utf-8' | 'base64';
+
+export const writeFileWithOptions = async (
+  filePath: string,
+  content: string,
+  options: {
+    workspaceId?: string;
+    encoding?: FileWriteEncoding;
+    skipCheckpoint?: boolean;
+    agentId?: string;
+  } = {}
+): Promise<void> => {
+  const res = await apiFetch(`${API_BASE}/write`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filePath,
+      content,
+      workspaceId: options.workspaceId,
+      encoding: options.encoding,
+      skipCheckpoint: options.skipCheckpoint,
+      agentId: options.agentId,
+    }),
+  });
+
+  if (!res.ok) {
+    const data = await safeReadJson(res);
+    throw new Error(data?.error || 'Failed to write file');
+  }
 };
 
 export const sendChat = async (messages: ChatMessage[], config?: LlmConfig): Promise<ChatMessage> => {
@@ -109,14 +168,25 @@ export const sendChat = async (messages: ChatMessage[], config?: LlmConfig): Pro
     const res = await apiFetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        temperature: 0.2,
-        config: config || { provider: 'lmstudio', model: 'openai/gpt-oss-20b', baseUrl: 'http://192.168.100.190:1234/v1' }
-      }),
-    });
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || "Error: No response content";
+        body: JSON.stringify({
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          temperature: 0.2,
+        config: config || { provider: 'openai', model: 'openai/gpt-oss-20b', baseUrl: 'http://localhost:8000' }
+        }),
+      });
+    const data = await safeReadJson(res);
+
+    if (!res.ok) {
+      const errorMsg =
+        (typeof data?.error === 'string' && data.error.trim())
+          ? data.error
+          : (typeof data?.message === 'string' && data.message.trim())
+            ? data.message
+            : `Request failed (${res.status})`;
+      return { role: 'assistant', content: `SYSTEM ALERT: ${errorMsg}`, timestamp: Date.now() };
+    }
+
+    const content = extractAssistantContent(data) || "Error: No response content";
     return { role: 'assistant', content, timestamp: Date.now() };
   } catch (error) {
     return { role: 'assistant', content: "SYSTEM ALERT: AI Offline or Connection Refused.", timestamp: Date.now() };

@@ -536,9 +536,10 @@ async function start() {
     // 4. Rate Limiting (DDoS Protection) - Story 1.1: 100 req/min per IP
     if (rateLimit) {
         const configuredRateLimit = Number.parseInt(process.env.NEURAL_RATE_LIMIT_MAX || '', 10);
+        const defaultRateLimitMax = process.env.NODE_ENV === 'production' ? 100 : 10000;
         const rateLimitMax = Number.isFinite(configuredRateLimit) && configuredRateLimit > 0
             ? configuredRateLimit
-            : 100;
+            : defaultRateLimitMax;
 
         await fastify.register(rateLimit, {
             max: rateLimitMax,
@@ -1203,7 +1204,12 @@ async function start() {
     fastify.post('/api/read', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { filePath, workspaceId } = request.body;
-            const cleanPath = safePath(filePath, workspaceId);
+
+            // If workspaceId is omitted, default to the active workspace (if any).
+            const activeWorkspace = workspaceId ? null : await workspaceService.getActiveWorkspace();
+            const workspaceIdToUse = workspaceId || activeWorkspace?.id || null;
+
+            const cleanPath = safePath(filePath, workspaceIdToUse);
             const content = await fs.readFile(cleanPath, 'utf-8');
 
             await securityLogger.logFileRead(
@@ -1244,20 +1250,26 @@ async function start() {
     // File System: Write (with automatic checkpointing - Story 6-8)
     fastify.post('/api/write', { preHandler: verifyToken }, async (request, reply) => {
         try {
-            const { filePath, content, agentId, skipCheckpoint, workspaceId } = request.body;
-            const cleanPath = safePath(filePath, workspaceId);
+            const { filePath, content, agentId, skipCheckpoint, workspaceId, encoding } = request.body;
+
+            // If workspaceId is omitted, default to the active workspace (if any).
+            const activeWorkspace = workspaceId ? null : await workspaceService.getActiveWorkspace();
+            const workspaceIdToUse = workspaceId || activeWorkspace?.id || null;
+
+            const cleanPath = safePath(filePath, workspaceIdToUse);
+            const isBinaryWrite = encoding && encoding !== 'utf-8';
             
             // Determine workspace path for checkpoint service
             let workspacePath = WORKSPACE_PATH;
-            if (workspaceId) {
-                const workspace = workspaceService.getWorkspaceById(workspaceId);
+            if (workspaceIdToUse) {
+                const workspace = workspaceService.getWorkspaceById(workspaceIdToUse);
                 if (workspace) {
                     workspacePath = workspace.path;
                 }
             }
 
             // Story 6-8: Create checkpoint before modification (if file exists)
-            if (!skipCheckpoint) {
+            if (!skipCheckpoint && !isBinaryWrite) {
                 try {
                     const oldContent = await fs.readFile(cleanPath, 'utf-8');
                     const checkpointService = getCheckpointService(workspacePath);
@@ -1276,7 +1288,14 @@ async function start() {
             }
 
             await fs.mkdir(path.dirname(cleanPath), { recursive: true });
-            await fs.writeFile(cleanPath, content, 'utf-8');
+            if (encoding === 'base64') {
+                if (typeof content !== 'string') {
+                    return reply.code(400).send({ error: 'Base64 content must be a string' });
+                }
+                await fs.writeFile(cleanPath, Buffer.from(content, 'base64'));
+            } else {
+                await fs.writeFile(cleanPath, content, 'utf-8');
+            }
 
             await securityLogger.logFileWrite(
                 filePath,

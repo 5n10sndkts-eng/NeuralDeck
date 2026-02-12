@@ -1,14 +1,12 @@
 import React from 'react';
-import { Cpu, Zap, ShieldAlert, ShieldCheck, Volume2, VolumeX, Crosshair, BookOpen, TestTube, Lock, Eye, EyeOff, HardHat, PartyPopper, Hexagon, ThumbsUp, ThumbsDown, Layers, PenTool, Search, Rocket, FileText, LayoutTemplate, Workflow, BrainCircuit, Palette, Bug, Box, Feather } from 'lucide-react';
+import { Cpu, Zap, ShieldAlert, ShieldCheck, Crosshair, BookOpen, TestTube, Lock, Eye, EyeOff, HardHat, PartyPopper, Hexagon, ThumbsUp, ThumbsDown, Layers, PenTool, Search, Rocket, FileText, LayoutTemplate, Workflow, BrainCircuit, Palette, Bug, Box, Feather } from 'lucide-react';
 import { AgentProfile, VoteResult, NeuralPhase } from '../types';
 import { AGENT_DEFINITIONS } from '../services/agent';
-import { SoundEffects } from '../services/sound';
 
 interface Props {
     isThinking: boolean;
     godMode: boolean;
     isListening?: boolean;
-    isMuted: boolean;
     isSupervised: boolean;
     partyMode?: boolean;
     activeAgent: AgentProfile;
@@ -19,14 +17,13 @@ interface Props {
     onToggleGodMode: () => void;
     onToggleSupervision: () => void;
     onTogglePartyMode?: () => void;
-    onToggleMute: () => void;
     onSelectAgent: (agent: AgentProfile) => void;
     onToggleAutoRun?: () => void;
 }
 
 const TheCouncil: React.FC<Props> = ({
-    isThinking, godMode, isMuted, isSupervised, partyMode, activeAgent, councilVotes = [], currentPhase = 'idle', autoRun, tokenUsage = 0,
-    onToggleGodMode, onToggleSupervision, onTogglePartyMode, onToggleMute, onSelectAgent, onToggleAutoRun
+    isThinking, godMode, isSupervised, partyMode, activeAgent, councilVotes = [], currentPhase = 'idle', autoRun, tokenUsage = 0,
+    onToggleGodMode, onToggleSupervision, onTogglePartyMode, onSelectAgent, onToggleAutoRun
 }) => {
 
     const agents = [
@@ -96,8 +93,7 @@ const TheCouncil: React.FC<Props> = ({
                     return (
                         <button
                             key={agent.id}
-                            onClick={() => { SoundEffects.click(); onSelectAgent(agent.id as AgentProfile); }}
-                            onMouseEnter={() => SoundEffects.hover()}
+                            onClick={() => onSelectAgent(agent.id as AgentProfile)}
                             style={{
                                 position: 'relative',
                                 display: 'flex',
@@ -176,7 +172,6 @@ const TheCouncil: React.FC<Props> = ({
 
                 <div style={{ display: 'flex', gap: '0.25rem' }}>
                     {onToggleAutoRun && <ControlButton onClick={onToggleAutoRun} active={autoRun} activeColor="#10b981" inactiveColor="#4b5563" icon={Rocket} title="Auto-Run Mode" glow />}
-                    <ControlButton onClick={onToggleMute} active={!isMuted} activeColor="#10b981" inactiveColor="#4b5563" icon={isMuted ? VolumeX : Volume2} title="Audio" />
                     <ControlButton onClick={onToggleSupervision} active={isSupervised && godMode} disabled={!godMode} activeColor="#3b82f6" inactiveColor="#4b5563" icon={isSupervised ? Eye : EyeOff} title="Supervision" glow />
                     <ControlButton onClick={onToggleGodMode} active={godMode} activeColor="#ef4444" inactiveColor="#4b5563" icon={godMode ? ShieldAlert : ShieldCheck} title="GOD MODE" glow pulse className={godMode ? "god-mode-active" : ""} />
                 </div>
@@ -216,8 +211,7 @@ const PhaseBadge = ({ active, label, icon: Icon, color }: any) => (
 
 const ControlButton = ({ onClick, active, disabled, activeColor, inactiveColor, icon: Icon, title, className = "", glow, pulse }: any) => (
     <button
-        onClick={() => { SoundEffects.click(); onClick(); }}
-        onMouseEnter={() => SoundEffects.hover()}
+        onClick={() => onClick()}
         disabled={disabled}
         style={{
             width: '2.35rem',

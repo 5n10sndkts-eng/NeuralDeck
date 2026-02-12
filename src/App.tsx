@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import {
     Activity, Hexagon, Terminal as TerminalIcon, Play, Square, Layout,
     KanbanSquare, Database, FlaskConical, Network, Server,
@@ -31,7 +31,6 @@ import { VisionDropZone } from './components/VisionDropZone';
 import { VisionPreview } from './components/VisionPreview';
 import { VoiceVisualizer } from './components/VoiceVisualizer';
 import { VoiceCommandHelp } from './components/VoiceCommandHelp';
-import { AudioVisualizer } from './components/AudioVisualizer';
 import { LoadingSkeleton, ConstructLoadingSkeleton, GraphLoadingSkeleton } from './components/LoadingSkeleton';
 import { ChunkErrorBoundary } from './components/ChunkErrorBoundary';
 
@@ -51,11 +50,8 @@ const TheGitLog = lazy(() => import('./components/TheGitLog'));
 import { useVoice } from './hooks/useVoiceInput';
 import { parseVoiceCommand } from './services/voiceCommandParser';
 import { useNeuralAutonomy } from './hooks/useNeuralAutonomy';
-import { fetchFiles, sendChat, readFile, writeFile } from './services/api';
+import { fetchFiles, sendChat, readFile, writeFile, writeFileWithOptions } from './services/api';
 import { authService } from './services/auth';
-import { GlobalAudio } from './services/audioEngine';
-import { SoundEffects } from './services/sound';
-import type { AmbientMood } from './services/ambientGenerator';
 import { AGENT_DEFINITIONS } from './services/agent';
 import { storageManager } from './services/storageManager';
 import { FileNode, ChatMessage, ConnectionProfile, ViewMode, AgentProfile } from './types';
@@ -118,12 +114,21 @@ const AppContent: React.FC = () => {
     const [showSidebar, setShowSidebar] = useState(true);
     const [showWorkspaceManager, setShowWorkspaceManager] = useState(false);
     const [showAgentChat, setShowAgentChat] = useState(false);
+    const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+
+    const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
+    const importFilesInputRef = useRef<HTMLInputElement | null>(null);
+    const importFolderInputRef = useRef<HTMLInputElement | null>(null);
 
     // Settings / Config - Initialize from LocalStorage
     const [profiles, setProfiles] = useState<ConnectionProfile[]>(() => {
         const saved = localStorage.getItem('neural_profiles');
         return saved ? JSON.parse(saved) : [{
-            id: 'default', name: 'LM Studio', provider: 'lmstudio', model: 'openai/gpt-oss-20b', baseUrl: 'http://192.168.100.190:1234/v1'
+            id: 'default',
+            name: 'Local OpenAI',
+            provider: 'openai',
+            model: 'openai/gpt-oss-20b',
+            baseUrl: 'http://localhost:8000'
         }];
     });
 
@@ -135,27 +140,16 @@ const AppContent: React.FC = () => {
     });
 
     const [godMode, setGodMode] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
     const [isSupervised, setIsSupervised] = useState(false);
     const [manualSelectedAgent, setManualSelectedAgent] = useState<AgentProfile>('analyst');
     const [droppedFile, setDroppedFile] = useState<File | null>(null);
     const [visionAnalysisLog, setVisionAnalysisLog] = useState<string[]>([]);
     const [showVoiceHelp, setShowVoiceHelp] = useState(false);
-    const [audioVolume, setAudioVolume] = useState(() => {
-        const saved = localStorage.getItem('audio_volume');
-        return saved ? parseFloat(saved) : 0.4;
-    });
-    const [audioMood, setAudioMood] = useState<AmbientMood>(() => {
-        const saved = localStorage.getItem('audio_mood');
-        return (saved as AmbientMood) || 'focus';
-    });
 
     // Persistence Effects
     useEffect(() => { localStorage.setItem('neural_profiles', JSON.stringify(profiles)); }, [profiles]);
     useEffect(() => { localStorage.setItem('neural_active_profile', activeProfileId); }, [activeProfileId]);
     useEffect(() => { localStorage.setItem('neural_routing', JSON.stringify(agentRouting)); }, [agentRouting]);
-    useEffect(() => { localStorage.setItem('audio_volume', audioVolume.toString()); }, [audioVolume]);
-    useEffect(() => { localStorage.setItem('audio_mood', audioMood); }, [audioMood]);
 
     // Storage auto-cleanup initialization (Story 6-2)
     useEffect(() => {
@@ -163,68 +157,6 @@ const AppContent: React.FC = () => {
             return await cleanupOldSessions(storageManager.getRetentionPeriod());
         });
     }, []);
-
-    // --- AUDIO SYSTEM (Unified) ---
-    // isMuted is already defined at line 98
-    const toggleAudio = async () => {
-        const muted = await GlobalAudio.toggle();
-        setIsMuted(muted);
-    };
-
-    // Auto-update GlobalAudio mode based on UI phase
-    useEffect(() => {
-        GlobalAudio.setMode(mode === 'ALERT' ? 'ALERT' : (mode === 'CODING' ? 'CODING' : 'IDLE'));
-    }, [mode]);
-
-    // Initialize GlobalAudio and sync initial state
-    useEffect(() => {
-        GlobalAudio.init(audioVolume, audioMood);
-        GlobalAudio.setMuted(isMuted);
-        GlobalAudio.setMode(mode === 'ALERT' ? 'ALERT' : (mode === 'CODING' ? 'CODING' : 'IDLE'));
-
-        if (activeAgents.length === 0) {
-            GlobalAudio.setAgentState('idle');
-        } else if (activeAgents.length === 1) {
-            GlobalAudio.setAgentState('working');
-        } else {
-            GlobalAudio.setAgentState('swarm');
-        }
-    }, []);
-
-    // Update GlobalAudio based on agent state
-    useEffect(() => {
-        if (activeAgents.length === 0) {
-            GlobalAudio.setAgentState('idle');
-        } else if (activeAgents.length === 1) {
-            GlobalAudio.setAgentState('working');
-        } else {
-            GlobalAudio.setAgentState('swarm');
-        }
-    }, [activeAgents]);
-
-    // Handle mute/volume changes
-    useEffect(() => {
-        GlobalAudio.init(audioVolume, audioMood);
-    }, [isMuted, audioVolume]);
-
-    // Mood changes handled by GlobalAudio.setMood internally if added, 
-    // but for now let's just use setMode as defined.
-
-    // Keyboard shortcut for mute (M key)
-    useEffect(() => {
-        const handleKeyPress = (e: KeyboardEvent) => {
-            if (e.key === 'm' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                // Only if not typing in an input
-                const target = e.target as HTMLElement;
-                if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-                    setIsMuted(!isMuted);
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyPress);
-        return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [isMuted]);
 
     // Adaptive UI Logic
     useEffect(() => {
@@ -234,6 +166,33 @@ const AppContent: React.FC = () => {
             setShowSidebar(true);
         }
     }, [mode]);
+
+    // Workspace menu: click-outside + escape-to-close
+    useEffect(() => {
+        if (!showWorkspaceMenu) return;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            const target = e.target as Node | null;
+            if (!target) return;
+            if (!workspaceMenuRef.current) return;
+            if (!workspaceMenuRef.current.contains(target)) {
+                setShowWorkspaceMenu(false);
+            }
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setShowWorkspaceMenu(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleMouseDown);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [showWorkspaceMenu]);
 
     // --- VOICE INPUT HOOK ---
     const voice = useVoice();
@@ -349,7 +308,7 @@ const AppContent: React.FC = () => {
     const handleFileOpen = async (path: string) => {
         if (!fileContents[path]) {
             try {
-                const content = await readFile(path);
+                const content = await readFile(path, currentWorkspace?.id);
                 setFileContents(prev => ({ ...prev, [path]: content }));
             } catch {
                 setFileContents(prev => ({ ...prev, [path]: '' }));
@@ -368,16 +327,23 @@ const AppContent: React.FC = () => {
     };
 
     const handleFileSave = async (path: string, content: string) => {
-        await writeFile(path, content);
-        setFileContents(prev => ({ ...prev, [path]: content }));
-        SoundEffects.success();
+        try {
+            await writeFile(path, content, currentWorkspace?.id);
+            setFileContents(prev => ({ ...prev, [path]: content }));
+        } catch (e: any) {
+            console.error('[FS] Save failed:', e);
+            await addMessage({
+                role: 'system',
+                content: `[FS ERROR] Failed to save ${path}: ${e?.message || 'Unknown error'}`,
+                timestamp: Date.now()
+            });
+        }
     };
 
     // --- TERMINAL HANDLERS ---
     const handleSendMessage = async (text: string) => {
         const userMsg: ChatMessage = { role: 'user', content: text, timestamp: Date.now() };
         await addMessage(userMsg);
-        SoundEffects.typing();
 
         let chatHistory = [...messages, userMsg];
         let agentId: AgentProfile | undefined = undefined;
@@ -405,7 +371,6 @@ const AppContent: React.FC = () => {
 
     const handleCodeTransfer = async (code: string) => {
         if (!activeFile) {
-            SoundEffects.error();
             alert("No file open to inject code into.");
             return;
         }
@@ -414,8 +379,16 @@ const AppContent: React.FC = () => {
         const newContent = currentContent + '\n\n' + code;
 
         setFileContents(prev => ({ ...prev, [activeFile]: newContent }));
-        await writeFile(activeFile, newContent);
-        SoundEffects.success();
+        try {
+            await writeFile(activeFile, newContent, currentWorkspace?.id);
+        } catch (e: any) {
+            console.error('[FS] Inject failed:', e);
+            await addMessage({
+                role: 'system',
+                content: `[FS ERROR] Failed to write ${activeFile}: ${e?.message || 'Unknown error'}`,
+                timestamp: Date.now()
+            });
+        }
     };
 
     const handleAudit = async (path: string) => {
@@ -429,7 +402,6 @@ const AppContent: React.FC = () => {
         };
 
         await addMessage(userMsg);
-        SoundEffects.typing();
 
         const response = await sendChat([...messages, userMsg], {
             provider: activeConfig.provider,
@@ -485,6 +457,103 @@ const AppContent: React.FC = () => {
         setVisionAnalysisLog([]);
     };
 
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = reader.result;
+                if (typeof result !== 'string') {
+                    reject(new Error('Failed to read file (unexpected result type)'));
+                    return;
+                }
+                const commaIndex = result.indexOf(',');
+                resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+            };
+            reader.onerror = () => {
+                reject(reader.error || new Error('Failed to read file'));
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const shouldSkipImportPath = (relativePath: string): boolean => {
+        const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
+        const parts = normalized.split('/').filter(Boolean);
+        const blocked = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'out']);
+        return parts.some((part) => blocked.has(part));
+    };
+
+    const importSelectedFiles = async (selected: File[], mode: 'file' | 'folder') => {
+        if (!currentWorkspace) {
+            setShowWorkspaceManager(true);
+            await addMessage({
+                role: 'system',
+                content: '[WORKSPACE] Select a workspace before importing files.',
+                timestamp: Date.now()
+            });
+            return;
+        }
+
+        if (!selected || selected.length === 0) return;
+
+        const filesToImport = selected;
+        await addMessage({
+            role: 'system',
+            content: `[IMPORT] Starting import (${filesToImport.length} file${filesToImport.length === 1 ? '' : 's'}) into workspace: ${currentWorkspace.name}`,
+            timestamp: Date.now()
+        });
+
+        let imported = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (const file of filesToImport) {
+            const rawRel =
+                mode === 'folder'
+                    ? ((file as any).webkitRelativePath || file.name)
+                    : file.name;
+
+            const relPath = String(rawRel || '').replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!relPath) {
+                skipped++;
+                continue;
+            }
+            if (shouldSkipImportPath(relPath)) {
+                skipped++;
+                continue;
+            }
+
+            try {
+                const base64 = await fileToBase64(file);
+                await writeFileWithOptions(relPath, base64, {
+                    workspaceId: currentWorkspace.id,
+                    encoding: 'base64',
+                    skipCheckpoint: true
+                });
+                imported++;
+
+                if (imported % 25 === 0) {
+                    await addMessage({
+                        role: 'system',
+                        content: `[IMPORT] Progress: ${imported}/${filesToImport.length} imported...`,
+                        timestamp: Date.now()
+                    });
+                }
+            } catch (e: any) {
+                failed++;
+                console.error('[IMPORT] Failed:', relPath, e);
+            }
+        }
+
+        await refreshFiles();
+
+        await addMessage({
+            role: 'system',
+            content: `[IMPORT] Complete. Imported: ${imported}. Skipped: ${skipped}. Failed: ${failed}.`,
+            timestamp: Date.now()
+        });
+    };
+
     // --- RENDER HELPERS ---
     // DockItem component removed as it's now handled by CyberDock
 
@@ -506,57 +575,157 @@ const AppContent: React.FC = () => {
                             borderRadius: '10px',
                             backdropFilter: 'blur(24px)',
                             boxShadow: '0 0 1px rgba(0, 240, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)'
-                        }}>
-                            {/* Premium Header */}
-                            <div 
-                                className="px-4 py-3.5 flex items-center gap-3 relative cursor-pointer transition-all"
-                                onClick={() => setShowWorkspaceManager(true)}
-                                style={{
-                                    background: 'linear-gradient(180deg, rgba(12, 12, 24, 0.98) 0%, rgba(6, 6, 16, 0.96) 100%)',
-                                    borderBottom: '1px solid rgba(0, 240, 255, 0.22)'
-                                }}
-                                title="Click to manage workspaces"
-                            >
-                                <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
-                                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.6) 50%, transparent 100%)',
-                                    boxShadow: '0 0 8px rgba(0, 240, 255, 0.3)'
-                                }} />
-                                <div style={{
-                                    width: '8px',
-                                    height: '8px',
-                                    borderRadius: '50%',
-                                    backgroundColor: currentWorkspace ? '#00ff88' : '#ff4466',
-                                    boxShadow: currentWorkspace 
-                                        ? '0 0 10px rgba(0, 255, 136, 0.7), 0 0 20px rgba(0, 255, 136, 0.4)'
-                                        : '0 0 10px rgba(255, 68, 102, 0.7), 0 0 20px rgba(255, 68, 102, 0.4)'
-                                }} />
-                                <div className="flex-1 min-w-0">
-                                    <div style={{
-                                        color: '#00f0ff',
-                                        fontSize: '10px',
-                                        fontWeight: 700,
-                                        letterSpacing: '0.2em',
-                                        textShadow: '0 0 10px rgba(0, 240, 255, 0.6)'
-                                    }}>
-                                        {currentWorkspace ? currentWorkspace.name.toUpperCase() : 'NO WORKSPACE'}
-                                    </div>
-                                    {currentWorkspace && (
-                                        <div style={{
-                                            color: '#666',
-                                            fontSize: '9px',
-                                            marginTop: '2px',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap'
-                                        }} title={currentWorkspace.path}>
-                                            {currentWorkspace.path}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                                <NeuralLink
-                                    files={files}
+	                        }}>
+	                            {/* Premium Header */}
+	                            <div 
+	                                className="px-4 py-3.5 flex items-center gap-3 relative transition-all"
+	                                style={{
+	                                    background: 'linear-gradient(180deg, rgba(12, 12, 24, 0.98) 0%, rgba(6, 6, 16, 0.96) 100%)',
+	                                    borderBottom: '1px solid rgba(0, 240, 255, 0.22)'
+	                                }}
+	                                title="Workspace"
+	                            >
+	                                <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
+	                                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.6) 50%, transparent 100%)',
+	                                    boxShadow: '0 0 8px rgba(0, 240, 255, 0.3)'
+	                                }} />
+	                                <button
+	                                    type="button"
+	                                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+	                                    onClick={() => { setShowWorkspaceMenu(false); setShowWorkspaceManager(true); }}
+	                                    style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+	                                    title="Open workspace manager"
+	                                >
+	                                    <div style={{
+	                                        width: '8px',
+	                                        height: '8px',
+	                                        borderRadius: '50%',
+	                                        backgroundColor: currentWorkspace ? '#00ff88' : '#ff4466',
+	                                        boxShadow: currentWorkspace 
+	                                            ? '0 0 10px rgba(0, 255, 136, 0.7), 0 0 20px rgba(0, 255, 136, 0.4)'
+	                                            : '0 0 10px rgba(255, 68, 102, 0.7), 0 0 20px rgba(255, 68, 102, 0.4)'
+	                                    }} />
+	                                    <div className="flex-1 min-w-0">
+	                                        <div style={{
+	                                            color: '#00f0ff',
+	                                            fontSize: '10px',
+	                                            fontWeight: 700,
+	                                            letterSpacing: '0.2em',
+	                                            textShadow: '0 0 10px rgba(0, 240, 255, 0.6)'
+	                                        }}>
+	                                            {currentWorkspace ? currentWorkspace.name.toUpperCase() : 'NO WORKSPACE'}
+	                                        </div>
+	                                        {currentWorkspace && (
+	                                            <div style={{
+	                                                color: '#666',
+	                                                fontSize: '9px',
+	                                                marginTop: '2px',
+	                                                overflow: 'hidden',
+	                                                textOverflow: 'ellipsis',
+	                                                whiteSpace: 'nowrap'
+	                                            }} title={currentWorkspace.path}>
+	                                                {currentWorkspace.path}
+	                                            </div>
+	                                        )}
+	                                    </div>
+	                                </button>
+
+	                                <div ref={workspaceMenuRef} className="relative">
+	                                    <button
+	                                        type="button"
+	                                        className="p-2 rounded-lg transition-colors"
+	                                        onClick={(e) => { e.stopPropagation(); setShowWorkspaceMenu(prev => !prev); }}
+	                                        style={{
+	                                            background: 'rgba(255, 255, 255, 0.04)',
+	                                            border: '1px solid rgba(0, 240, 255, 0.18)'
+	                                        }}
+	                                        data-testid="workspace-menu-button"
+	                                        aria-haspopup="menu"
+	                                        aria-expanded={showWorkspaceMenu}
+	                                        title="Workspace actions"
+	                                    >
+	                                        <Menu size={16} style={{ color: '#00f0ff', filter: 'drop-shadow(0 0 8px rgba(0, 240, 255, 0.35))' }} />
+	                                    </button>
+
+	                                    {showWorkspaceMenu && (
+	                                        <div
+	                                            role="menu"
+	                                            className="absolute right-0 mt-2 w-56 overflow-hidden"
+	                                            style={{
+	                                                background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.98) 0%, rgba(5, 5, 14, 0.99) 100%)',
+	                                                border: '1px solid rgba(0, 240, 255, 0.22)',
+	                                                borderRadius: '10px',
+	                                                backdropFilter: 'blur(18px)',
+	                                                boxShadow: '0 0 1px rgba(0, 240, 255, 0.4), 0 12px 40px rgba(0, 0, 0, 0.6)',
+	                                                zIndex: 50
+	                                            }}
+	                                            onClick={(e) => e.stopPropagation()}
+	                                        >
+	                                            <button
+	                                                type="button"
+	                                                role="menuitem"
+	                                                className="w-full px-4 py-3 text-left transition-colors"
+	                                                style={{ color: '#ddd', fontSize: '12px' }}
+	                                                data-testid="workspace-menu-open"
+	                                                onClick={() => { setShowWorkspaceMenu(false); setShowWorkspaceManager(true); }}
+	                                            >
+	                                                Open Workspace...
+	                                            </button>
+
+	                                            <div style={{ height: '1px', background: 'rgba(0, 240, 255, 0.12)' }} />
+
+	                                            <button
+	                                                type="button"
+	                                                role="menuitem"
+	                                                className="w-full px-4 py-3 text-left transition-colors"
+	                                                style={{
+	                                                    color: currentWorkspace ? '#ddd' : '#555',
+	                                                    fontSize: '12px',
+	                                                    cursor: currentWorkspace ? 'pointer' : 'not-allowed'
+	                                                }}
+	                                                data-testid="workspace-menu-import-file"
+	                                                disabled={!currentWorkspace}
+	                                                onClick={() => {
+	                                                    setShowWorkspaceMenu(false);
+	                                                    if (!currentWorkspace) return;
+	                                                    importFilesInputRef.current?.click();
+	                                                }}
+	                                            >
+	                                                Import File...
+	                                            </button>
+
+	                                            <button
+	                                                type="button"
+	                                                role="menuitem"
+	                                                className="w-full px-4 py-3 text-left transition-colors"
+	                                                style={{
+	                                                    color: currentWorkspace ? '#ddd' : '#555',
+	                                                    fontSize: '12px',
+	                                                    cursor: currentWorkspace ? 'pointer' : 'not-allowed'
+	                                                }}
+	                                                data-testid="workspace-menu-import-folder"
+	                                                disabled={!currentWorkspace}
+	                                                onClick={() => {
+	                                                    setShowWorkspaceMenu(false);
+	                                                    if (!currentWorkspace) return;
+	                                                    importFolderInputRef.current?.click();
+	                                                }}
+	                                            >
+	                                                Import Folder...
+	                                            </button>
+
+	                                            {!currentWorkspace && (
+	                                                <div className="px-4 py-2" style={{ color: '#666', fontSize: '11px' }}>
+	                                                    Select a workspace first to import files.
+	                                                </div>
+	                                            )}
+	                                        </div>
+	                                    )}
+	                                </div>
+	                            </div>
+	                            <div className="flex-1 overflow-hidden">
+	                                <NeuralLink
+	                                    files={files}
                                     onFileSelect={handleFileOpen}
                                     activeFile={activeFile}
                                     openFiles={openFiles}
@@ -745,14 +914,12 @@ const AppContent: React.FC = () => {
                             currentPhase={phase}
                             onSelectAgent={(agent) => setManualSelectedAgent(agent)}
                             godMode={godMode}
-                            isMuted={isMuted}
                             isSupervised={isSupervised}
                             isThinking={activeAgents.length > 0}
                             autoRun={isAutoMode}
                             tokenUsage={0}
                             onToggleGodMode={() => setGodMode(!godMode)}
                             onToggleSupervision={() => setIsSupervised(!isSupervised)}
-                            onToggleMute={() => setIsMuted(!isMuted)}
                             onToggleAutoRun={toggleAuto}
                         />
                     </div>
@@ -807,20 +974,6 @@ const AppContent: React.FC = () => {
                 onClose={() => setShowVoiceHelp(false)}
             />
 
-            <AudioVisualizer
-                isPlaying={!isMuted}
-                volume={isMuted ? 0 : audioVolume}
-                mood={audioMood}
-                onVolumeChange={(vol) => {
-                    setAudioVolume(vol);
-                    if (vol > 0 && isMuted) {
-                        setIsMuted(false);
-                    }
-                }}
-                onMoodChange={setAudioMood}
-                onToggleMute={() => setIsMuted(!isMuted)}
-            />
-
             <CommandPalette
                 isOpen={showCmdPalette}
                 onClose={() => setShowCmdPalette(false)}
@@ -840,6 +993,33 @@ const AppContent: React.FC = () => {
                 isOpen={showAgentChat}
                 onClose={() => setShowAgentChat(false)}
                 defaultAgent={manualSelectedAgent}
+            />
+
+            {/* Hidden inputs used by the workspace dropdown import actions */}
+            <input
+                ref={importFilesInputRef}
+                type="file"
+                multiple
+                data-testid="workspace-import-files-input"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                    const files = e.currentTarget.files ? Array.from(e.currentTarget.files) : [];
+                    e.currentTarget.value = '';
+                    void importSelectedFiles(files, 'file');
+                }}
+            />
+            <input
+                ref={importFolderInputRef}
+                type="file"
+                multiple
+                data-testid="workspace-import-folder-input"
+                style={{ display: 'none' }}
+                {...({ webkitdirectory: 'true', directory: 'true' } as any)}
+                onChange={(e) => {
+                    const files = e.currentTarget.files ? Array.from(e.currentTarget.files) : [];
+                    e.currentTarget.value = '';
+                    void importSelectedFiles(files, 'folder');
+                }}
             />
         </MainLayout>
     );
