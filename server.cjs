@@ -51,6 +51,10 @@ const { workspaceService, NEURALDECK_DIR } = require('./server/services/workspac
 const opencodeCLI = require('./server/services/opencodeCLI.cjs');
 const providerAdapter = require('./server/services/providerAdapter.cjs');
 
+// --- OPTIMIZED MCP SERVICE ---
+const { getMCPAdapter } = require('./server/services/mcp-adapter.cjs');
+const mcpAdapter = getMCPAdapter();
+
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '127.0.0.1';
 const WORKSPACE_PATH = process.cwd();
@@ -2230,6 +2234,97 @@ async function start() {
         });
     });
 
+    // --- OPTIMIZED MCP ENDPOINTS ---
+    // GET /api/mcp/tools - List all available tools with metadata
+    fastify.get('/api/mcp/tools', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const tools = mcpAdapter.getTools();
+            return {
+                success: true,
+                tools,
+                count: tools.length
+            };
+        } catch (error) {
+            fastify.log.error(`[MCP] Failed to list tools: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // GET /api/mcp/metrics - Get MCP server metrics
+    fastify.get('/api/mcp/metrics', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const metrics = mcpAdapter.getMetrics();
+            return {
+                success: true,
+                metrics
+            };
+        } catch (error) {
+            fastify.log.error(`[MCP] Failed to get metrics: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // GET /api/mcp/health - Get MCP health status
+    fastify.get('/api/mcp/health', { preHandler: verifyToken }, async (request, reply) => {
+        try {
+            const health = mcpAdapter.getHealthStatus();
+            return {
+                success: true,
+                health
+            };
+        } catch (error) {
+            fastify.log.error(`[MCP] Failed to get health: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    // POST /api/mcp/execute - Optimized tool execution
+    fastify.post('/api/mcp/execute', { preHandler: verifyToken }, async (request, reply) => {
+        const { tool, args } = request.body;
+        const clientIp = request.ip;
+
+        if (!tool) {
+            return reply.code(400).send({
+                success: false,
+                error: 'Tool name is required'
+            });
+        }
+
+        try {
+            fastify.log.info(`[MCP] Executing tool: ${tool} from ${clientIp}`);
+            
+            const result = await mcpAdapter.executeTool(tool, args, {
+                clientIp,
+                fastify
+            });
+
+            if (result.success) {
+                fastify.log.info(`[MCP] Tool ${tool} executed successfully in ${result.executionTime}ms`);
+            } else {
+                fastify.log.warn(`[MCP] Tool ${tool} failed: ${result.error}`);
+            }
+
+            return reply.send(result);
+        } catch (error) {
+            fastify.log.error(`[MCP] Error executing tool ${tool}: ${error.message}`);
+            reply.code(500).send({
+                success: false,
+                error: error.message,
+                tool
+            });
+        }
+    });
+
+    // Legacy MCP endpoint (kept for backward compatibility)
     fastify.post('/api/mcp/call', { preHandler: verifyToken }, async (request, reply) => {
         const { tool, args } = request.body;
         const clientIp = request.ip;
@@ -4071,6 +4166,22 @@ ${contentB}
         if (process.env.NODE_ENV !== 'production') {
             console.log(`[AUTH] JWT_SECRET: ${JWT_SECRET.substring(0, 10)}...`);
             console.log(`[AUTH] Session expiry: ${SESSION_EXPIRY}s (${SESSION_EXPIRY / 3600}h)`);
+        }
+
+        // Initialize Optimized MCP Adapter
+        try {
+            await mcpAdapter.initialize({
+                runCommand,
+                validateCommand,
+                validateCommandPaths,
+                EXEC_OPTIONS,
+                COMMAND_TIMEOUT,
+                WORKSPACE_PATH,
+                NEURALDECK_DIR
+            });
+            console.log('[MCP] Optimized MCP adapter initialized');
+        } catch (mcpErr) {
+            console.error('[MCP] Failed to initialize MCP adapter:', mcpErr.message);
         }
     } catch (err) {
         fastify.log.error(err);
