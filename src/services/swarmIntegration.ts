@@ -22,6 +22,7 @@ import {
 import { StoryMetadata } from '../hooks/useStoryWatcher';
 import { LlmConfig, AgentAction, LlmProvider } from '../types';
 import { sendChat } from './api';
+import { executeAgentTask } from './agentTaskHandlers';
 
 export interface SwarmIntegrationConfig {
   enableRealtimeUpdates: boolean;
