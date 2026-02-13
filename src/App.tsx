@@ -3,7 +3,7 @@ import {
     Activity, Hexagon, Terminal as TerminalIcon, Play, Square, Layout,
     KanbanSquare, Database, FlaskConical, Network, Server,
     GitBranch, Layers, Users, Settings, Loader2, Home, Cpu,
-    Shield, Globe, MessageSquare, Menu
+    Shield, Globe, MessageSquare, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -585,144 +585,145 @@ const AppContent: React.FC = () => {
 	                                }}
 	                                title="Workspace"
 	                            >
-	                                <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
-	                                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.6) 50%, transparent 100%)',
-	                                    boxShadow: '0 0 8px rgba(0, 240, 255, 0.3)'
-	                                }} />
-	                                <button
-	                                    type="button"
-	                                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
-	                                    onClick={() => { setShowWorkspaceMenu(false); setShowWorkspaceManager(true); }}
-	                                    style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-	                                    title="Open workspace manager"
-	                                >
-	                                    <div style={{
-	                                        width: '8px',
-	                                        height: '8px',
-	                                        borderRadius: '50%',
-	                                        backgroundColor: currentWorkspace ? '#00ff88' : '#ff4466',
-	                                        boxShadow: currentWorkspace 
-	                                            ? '0 0 10px rgba(0, 255, 136, 0.7), 0 0 20px rgba(0, 255, 136, 0.4)'
-	                                            : '0 0 10px rgba(255, 68, 102, 0.7), 0 0 20px rgba(255, 68, 102, 0.4)'
-	                                    }} />
-	                                    <div className="flex-1 min-w-0">
-	                                        <div style={{
-	                                            color: '#00f0ff',
-	                                            fontSize: '10px',
-	                                            fontWeight: 700,
-	                                            letterSpacing: '0.2em',
-	                                            textShadow: '0 0 10px rgba(0, 240, 255, 0.6)'
-	                                        }}>
-	                                            {currentWorkspace ? currentWorkspace.name.toUpperCase() : 'NO WORKSPACE'}
-	                                        </div>
-	                                        {currentWorkspace && (
-	                                            <div style={{
-	                                                color: '#666',
-	                                                fontSize: '9px',
-	                                                marginTop: '2px',
-	                                                overflow: 'hidden',
-	                                                textOverflow: 'ellipsis',
-	                                                whiteSpace: 'nowrap'
-	                                            }} title={currentWorkspace.path}>
-	                                                {currentWorkspace.path}
-	                                            </div>
-	                                        )}
-	                                    </div>
-	                                </button>
+		                                <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
+		                                    background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.6) 50%, transparent 100%)',
+		                                    boxShadow: '0 0 8px rgba(0, 240, 255, 0.3)'
+		                                }} />
+		                                <div ref={workspaceMenuRef} className="relative flex-1 min-w-0">
+		                                    <button
+		                                        type="button"
+		                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left"
+		                                        onClick={(e) => { e.stopPropagation(); setShowWorkspaceMenu(prev => !prev); }}
+		                                        style={{
+		                                            background: 'rgba(0, 240, 255, 0.06)',
+		                                            border: '1px solid rgba(0, 240, 255, 0.26)',
+		                                            boxShadow: '0 0 0 1px rgba(0, 240, 255, 0.10) inset, 0 10px 30px rgba(0, 0, 0, 0.25)',
+		                                            cursor: 'pointer'
+		                                        }}
+		                                        data-testid="workspace-menu-button"
+		                                        aria-haspopup="menu"
+		                                        aria-expanded={showWorkspaceMenu}
+		                                        title={currentWorkspace ? `Workspace: ${currentWorkspace.name}` : 'Workspace: none selected'}
+		                                    >
+		                                        <div style={{
+		                                            width: '9px',
+		                                            height: '9px',
+		                                            borderRadius: '50%',
+		                                            flexShrink: 0,
+		                                            backgroundColor: currentWorkspace ? '#00ff88' : '#ff4466',
+		                                            boxShadow: currentWorkspace
+		                                                ? '0 0 10px rgba(0, 255, 136, 0.7), 0 0 20px rgba(0, 255, 136, 0.4)'
+		                                                : '0 0 10px rgba(255, 68, 102, 0.7), 0 0 20px rgba(255, 68, 102, 0.4)'
+		                                        }} />
+		                                        <div className="flex-1 min-w-0">
+		                                            <div style={{
+		                                                color: '#00f0ff',
+		                                                fontSize: '10px',
+		                                                fontWeight: 800,
+		                                                letterSpacing: '0.22em',
+		                                                textShadow: '0 0 12px rgba(0, 240, 255, 0.7)'
+		                                            }}>
+		                                                {currentWorkspace ? currentWorkspace.name.toUpperCase() : 'NO WORKSPACE'}
+		                                            </div>
+		                                            <div style={{
+		                                                color: currentWorkspace ? '#666' : 'rgba(0, 240, 255, 0.65)',
+		                                                fontSize: '9px',
+		                                                marginTop: '2px',
+		                                                overflow: 'hidden',
+		                                                textOverflow: 'ellipsis',
+		                                                whiteSpace: 'nowrap'
+		                                            }} title={currentWorkspace?.path}>
+		                                                {currentWorkspace ? currentWorkspace.path : 'Click to open / create a workspace'}
+		                                            </div>
+		                                        </div>
+		                                        <ChevronDown
+		                                            size={18}
+		                                            style={{
+		                                                color: '#00f0ff',
+		                                                opacity: 0.95,
+		                                                transform: showWorkspaceMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+		                                                transition: 'transform 160ms ease',
+		                                                filter: 'drop-shadow(0 0 10px rgba(0, 240, 255, 0.35))'
+		                                            }}
+		                                        />
+		                                    </button>
 
-	                                <div ref={workspaceMenuRef} className="relative">
-	                                    <button
-	                                        type="button"
-	                                        className="p-2 rounded-lg transition-colors"
-	                                        onClick={(e) => { e.stopPropagation(); setShowWorkspaceMenu(prev => !prev); }}
-	                                        style={{
-	                                            background: 'rgba(255, 255, 255, 0.04)',
-	                                            border: '1px solid rgba(0, 240, 255, 0.18)'
-	                                        }}
-	                                        data-testid="workspace-menu-button"
-	                                        aria-haspopup="menu"
-	                                        aria-expanded={showWorkspaceMenu}
-	                                        title="Workspace actions"
-	                                    >
-	                                        <Menu size={16} style={{ color: '#00f0ff', filter: 'drop-shadow(0 0 8px rgba(0, 240, 255, 0.35))' }} />
-	                                    </button>
+		                                    {showWorkspaceMenu && (
+		                                        <div
+		                                            role="menu"
+		                                            className="absolute left-0 right-0 mt-2 overflow-hidden"
+		                                            style={{
+		                                                background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.98) 0%, rgba(5, 5, 14, 0.99) 100%)',
+		                                                border: '1px solid rgba(0, 240, 255, 0.28)',
+		                                                borderRadius: '10px',
+		                                                backdropFilter: 'blur(18px)',
+		                                                boxShadow: '0 0 1px rgba(0, 240, 255, 0.4), 0 16px 48px rgba(0, 0, 0, 0.70)',
+		                                                zIndex: 80
+		                                            }}
+		                                            onClick={(e) => e.stopPropagation()}
+		                                        >
+		                                            <button
+		                                                type="button"
+		                                                role="menuitem"
+		                                                className="w-full px-4 py-3 text-left transition-colors hover:bg-[rgba(0,240,255,0.08)]"
+		                                                style={{ color: '#ddd', fontSize: '12px' }}
+		                                                data-testid="workspace-menu-open"
+		                                                onClick={() => { setShowWorkspaceMenu(false); setShowWorkspaceManager(true); }}
+		                                            >
+		                                                Open Workspace...
+		                                            </button>
 
-	                                    {showWorkspaceMenu && (
-	                                        <div
-	                                            role="menu"
-	                                            className="absolute right-0 mt-2 w-56 overflow-hidden"
-	                                            style={{
-	                                                background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.98) 0%, rgba(5, 5, 14, 0.99) 100%)',
-	                                                border: '1px solid rgba(0, 240, 255, 0.22)',
-	                                                borderRadius: '10px',
-	                                                backdropFilter: 'blur(18px)',
-	                                                boxShadow: '0 0 1px rgba(0, 240, 255, 0.4), 0 12px 40px rgba(0, 0, 0, 0.6)',
-	                                                zIndex: 50
-	                                            }}
-	                                            onClick={(e) => e.stopPropagation()}
-	                                        >
-	                                            <button
-	                                                type="button"
-	                                                role="menuitem"
-	                                                className="w-full px-4 py-3 text-left transition-colors"
-	                                                style={{ color: '#ddd', fontSize: '12px' }}
-	                                                data-testid="workspace-menu-open"
-	                                                onClick={() => { setShowWorkspaceMenu(false); setShowWorkspaceManager(true); }}
-	                                            >
-	                                                Open Workspace...
-	                                            </button>
+		                                            <div style={{ height: '1px', background: 'rgba(0, 240, 255, 0.12)' }} />
 
-	                                            <div style={{ height: '1px', background: 'rgba(0, 240, 255, 0.12)' }} />
+		                                            <button
+		                                                type="button"
+		                                                role="menuitem"
+		                                                className="w-full px-4 py-3 text-left transition-colors hover:bg-[rgba(0,240,255,0.08)]"
+		                                                style={{
+		                                                    color: currentWorkspace ? '#ddd' : '#555',
+		                                                    fontSize: '12px',
+		                                                    cursor: currentWorkspace ? 'pointer' : 'not-allowed'
+		                                                }}
+		                                                data-testid="workspace-menu-import-file"
+		                                                disabled={!currentWorkspace}
+		                                                onClick={() => {
+		                                                    setShowWorkspaceMenu(false);
+		                                                    if (!currentWorkspace) return;
+		                                                    importFilesInputRef.current?.click();
+		                                                }}
+		                                            >
+		                                                Import File...
+		                                            </button>
 
-	                                            <button
-	                                                type="button"
-	                                                role="menuitem"
-	                                                className="w-full px-4 py-3 text-left transition-colors"
-	                                                style={{
-	                                                    color: currentWorkspace ? '#ddd' : '#555',
-	                                                    fontSize: '12px',
-	                                                    cursor: currentWorkspace ? 'pointer' : 'not-allowed'
-	                                                }}
-	                                                data-testid="workspace-menu-import-file"
-	                                                disabled={!currentWorkspace}
-	                                                onClick={() => {
-	                                                    setShowWorkspaceMenu(false);
-	                                                    if (!currentWorkspace) return;
-	                                                    importFilesInputRef.current?.click();
-	                                                }}
-	                                            >
-	                                                Import File...
-	                                            </button>
+		                                            <button
+		                                                type="button"
+		                                                role="menuitem"
+		                                                className="w-full px-4 py-3 text-left transition-colors hover:bg-[rgba(0,240,255,0.08)]"
+		                                                style={{
+		                                                    color: currentWorkspace ? '#ddd' : '#555',
+		                                                    fontSize: '12px',
+		                                                    cursor: currentWorkspace ? 'pointer' : 'not-allowed'
+		                                                }}
+		                                                data-testid="workspace-menu-import-folder"
+		                                                disabled={!currentWorkspace}
+		                                                onClick={() => {
+		                                                    setShowWorkspaceMenu(false);
+		                                                    if (!currentWorkspace) return;
+		                                                    importFolderInputRef.current?.click();
+		                                                }}
+		                                            >
+		                                                Import Folder...
+		                                            </button>
 
-	                                            <button
-	                                                type="button"
-	                                                role="menuitem"
-	                                                className="w-full px-4 py-3 text-left transition-colors"
-	                                                style={{
-	                                                    color: currentWorkspace ? '#ddd' : '#555',
-	                                                    fontSize: '12px',
-	                                                    cursor: currentWorkspace ? 'pointer' : 'not-allowed'
-	                                                }}
-	                                                data-testid="workspace-menu-import-folder"
-	                                                disabled={!currentWorkspace}
-	                                                onClick={() => {
-	                                                    setShowWorkspaceMenu(false);
-	                                                    if (!currentWorkspace) return;
-	                                                    importFolderInputRef.current?.click();
-	                                                }}
-	                                            >
-	                                                Import Folder...
-	                                            </button>
-
-	                                            {!currentWorkspace && (
-	                                                <div className="px-4 py-2" style={{ color: '#666', fontSize: '11px' }}>
-	                                                    Select a workspace first to import files.
-	                                                </div>
-	                                            )}
-	                                        </div>
-	                                    )}
-	                                </div>
-	                            </div>
+		                                            {!currentWorkspace && (
+		                                                <div className="px-4 py-2" style={{ color: '#888', fontSize: '11px' }}>
+		                                                    Select a workspace first to import files.
+		                                                </div>
+		                                            )}
+		                                        </div>
+		                                    )}
+		                                </div>
+		                            </div>
 	                            <div className="flex-1 overflow-hidden">
 	                                <NeuralLink
 	                                    files={files}

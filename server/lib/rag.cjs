@@ -6,9 +6,12 @@
  * Uses LangChain with HuggingFace Transformers for local embeddings.
  */
 
-const { RecursiveCharacterTextSplitter } = require("langchain/text_splitter");
-const { MemoryVectorStore } = require("langchain/vectorstores/memory");
-const { HuggingFaceTransformersEmbeddings } = require("@langchain/community/embeddings/hf_transformers");
+// LangChain v1+ moved many subpath exports out of the main `langchain` package.
+// We use the compatibility exports from `@langchain/classic` here to keep this
+// CJS backend stable.
+const { RecursiveCharacterTextSplitter } = require("@langchain/classic/text_splitter");
+const { MemoryVectorStore } = require("@langchain/classic/vectorstores/memory");
+const { HuggingFaceTransformersEmbeddings } = require("@langchain/community/embeddings/huggingface_transformers");
 
 // Singleton Store (In-Memory with optional persistence)
 let vectorStore = null;
@@ -34,7 +37,7 @@ async function getEmbeddings() {
     if (!embeddings) {
         // Use a small, quantized model for speed on local CPU
         embeddings = new HuggingFaceTransformersEmbeddings({
-            modelName: RAG_CONFIG.modelName,
+            model: RAG_CONFIG.modelName,
         });
         console.log(`[RAG] Initialized embeddings model: ${RAG_CONFIG.modelName}`);
     }
