@@ -12,8 +12,15 @@ import SwarmCoordinator, {
 } from '../core/swarm/swarm-coordinator';
 import AgentRegistry, { Agent, AgentTask, AgentStatus } from '../core/swarm/agent-registry';
 import { CommunicationBus, SwarmMessage } from '../core/swarm/communication-bus';
-import EfficiencyMonitor from '../core/swarm/efficiency-monitor';
+import EfficiencyMonitor, { type EfficiencyReport } from '../core/swarm/efficiency-monitor';
 import { LoadBalancer } from '../core/swarm/load-balancer';
+import {
+  type TopologyConfig,
+  type SwarmTopology,
+  type ExecutionBatch,
+  createTopologyStrategy,
+  recommendTopology,
+} from '../core/swarm/topology';
 import {
   executeSwarm,
   DeveloperTaskResult,
@@ -32,6 +39,8 @@ export interface SwarmIntegrationConfig {
   maxParallelAgents: number;
   taskTimeoutMs: number;
   retryAttempts: number;
+  /** Topology to use for swarm execution. Defaults to hierarchical. */
+  topology: TopologyConfig;
 }
 
 export const DEFAULT_INTEGRATION_CONFIG: SwarmIntegrationConfig = {
@@ -41,6 +50,7 @@ export const DEFAULT_INTEGRATION_CONFIG: SwarmIntegrationConfig = {
   maxParallelAgents: 5,
   taskTimeoutMs: 300000,
   retryAttempts: 2,
+  topology: { type: 'hierarchical', coordinatorId: 1 },
 };
 
 export interface AgentExecutionContext {
@@ -75,6 +85,7 @@ export class SwarmIntegrationService {
   private loadBalancer: LoadBalancer;
   private efficiencyMonitor?: EfficiencyMonitor;
   private config: SwarmIntegrationConfig;
+  private topologyConfig: TopologyConfig;
   private socket?: any; // Socket.IO instance
   private statusListeners: Set<(update: SwarmStatusUpdate) => void> = new Set();
   private isInitialized: boolean = false;
@@ -82,12 +93,16 @@ export class SwarmIntegrationService {
 
   constructor(config: Partial<SwarmIntegrationConfig> = {}) {
     this.config = { ...DEFAULT_INTEGRATION_CONFIG, ...config };
+    this.topologyConfig = this.config.topology;
 
     // Initialize V3 swarm components
     this.coordinator = new SwarmCoordinator({
       maxParallelAgents: this.config.maxParallelAgents,
       taskTimeoutMs: this.config.taskTimeoutMs,
       retryAttempts: this.config.retryAttempts,
+      topology: this.topologyConfig,
+      enableMonitoring: this.config.enableEfficiencyMonitoring,
+      monitoringIntervalMs: 5000,
     });
 
     this.commBus = new CommunicationBus();
@@ -101,6 +116,40 @@ export class SwarmIntegrationService {
     if (this.config.enableEfficiencyMonitoring) {
       this.efficiencyMonitor = new EfficiencyMonitor();
     }
+  }
+
+  /**
+   * Switch swarm topology at runtime.
+   * Takes effect on the next executeSwarm() call.
+   */
+  setTopology(topology: SwarmTopology | TopologyConfig): void {
+    this.topologyConfig =
+      typeof topology === 'string' ? { type: topology } : topology;
+    this.config.topology = this.topologyConfig;
+    logger.info(`[SwarmIntegration] Topology changed to: ${this.topologyConfig.type}`);
+  }
+
+  /**
+   * Get available topologies with descriptions.
+   */
+  getAvailableTopologies(): Array<{ type: SwarmTopology; description: string }> {
+    return [
+      { type: 'mesh', description: 'All agents communicate directly — maximum parallelism, best for independent tasks' },
+      { type: 'hierarchical', description: 'Coordinator delegates to domain leads — structured phases, best for complex workflows' },
+      { type: 'star', description: 'Central hub dispatches all work — centralized control, best for tightly coupled tasks' },
+      { type: 'ring', description: 'Sequential pipeline — each agent feeds the next, best for linear workflows' },
+    ];
+  }
+
+  /**
+   * Generate execution batches based on current topology.
+   * Returns the planned execution order without actually running anything.
+   */
+  getExecutionPlan(): ExecutionBatch[] {
+    const registry = (this.coordinator as any).registry as AgentRegistry;
+    const agents = registry.getAllAgents();
+    const strategy = createTopologyStrategy(this.topologyConfig, agents);
+    return strategy.getExecutionPlan(agents);
   }
 
   /**

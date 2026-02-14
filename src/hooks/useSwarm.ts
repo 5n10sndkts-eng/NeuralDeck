@@ -3,6 +3,8 @@ import { useSocket } from './useSocket';
 import { AgentProfile, AgentNodeState } from '../types';
 import { StoryMetadata } from './useStoryWatcher';
 import { triggerThink, Thought } from '../services/api';
+import { getSwarmIntegrationService, type SwarmStatusUpdate } from '../services/swarmIntegration';
+import type { SwarmTopology, TopologyConfig, ExecutionBatch } from '../core/swarm/topology';
 import { logger } from '@/services/logger';
 
 export interface SwarmNode {
@@ -42,6 +44,11 @@ export const useSwarm = () => {
     const [developerNodes, setDeveloperNodes] = useState<DeveloperSwarmNode[]>([]);
     const [storyToDevMap, setStoryToDevMap] = useState<Map<string, string>>(new Map());
     const spawnTimestamps = useRef<number[]>([]);
+
+    // Topology state (V3 Swarm Orchestration)
+    const [topology, setTopologyState] = useState<SwarmTopology>('hierarchical');
+    const [executionPlan, setExecutionPlan] = useState<ExecutionBatch[]>([]);
+    const [swarmStatus, setSwarmStatus] = useState<SwarmStatusUpdate | null>(null);
 
     // Process Logs into Graph Nodes
     useEffect(() => {
@@ -265,6 +272,48 @@ export const useSwarm = () => {
         }
     }, []);
 
+    // --- V3 Topology Management ---
+
+    /**
+     * Switch the swarm topology. Updates state and recalculates execution plan.
+     */
+    const setTopology = useCallback((topo: SwarmTopology | TopologyConfig) => {
+        const service = getSwarmIntegrationService();
+        service.setTopology(topo);
+        const topoType = typeof topo === 'string' ? topo : topo.type;
+        setTopologyState(topoType);
+        setExecutionPlan(service.getExecutionPlan());
+        logger.info(`[useSwarm] Topology set to: ${topoType}`);
+    }, []);
+
+    /**
+     * Get the current execution plan (batch schedule).
+     */
+    const refreshExecutionPlan = useCallback(() => {
+        const service = getSwarmIntegrationService();
+        const plan = service.getExecutionPlan();
+        setExecutionPlan(plan);
+        return plan;
+    }, []);
+
+    /**
+     * Get available topology options with descriptions.
+     */
+    const getAvailableTopologies = useCallback(() => {
+        return getSwarmIntegrationService().getAvailableTopologies();
+    }, []);
+
+    /**
+     * Subscribe to real-time swarm status updates.
+     */
+    useEffect(() => {
+        const service = getSwarmIntegrationService();
+        const unsubscribe = service.subscribeToUpdates((update) => {
+            setSwarmStatus(update);
+        });
+        return unsubscribe;
+    }, []);
+
     return {
         // Original swarm functionality
         nodes,
@@ -281,6 +330,14 @@ export const useSwarm = () => {
         getSpawnMetrics,
         storyToDevMap,
         triggerReasoning, // Story 7.1
+
+        // V3 Topology & Orchestration
+        topology,
+        setTopology,
+        executionPlan,
+        refreshExecutionPlan,
+        getAvailableTopologies,
+        swarmStatus,
     };
 };
 
