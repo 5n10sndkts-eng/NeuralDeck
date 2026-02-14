@@ -1,0 +1,245 @@
+name: Automated Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  swarm-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/review'))
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (apt update && apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && apt update \
+          && apt install gh -y
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Get PR Context
+        id: pr-context
+        run: |
+          PR_NUM=${{ github.event.pull_request.number || github.event.issue.number }}
+          echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
+          
+          PR_DATA=$(gh pr view $PR_NUM --json files,title,body,labels,additions,deletions 2>/dev/null || echo '{}')
+          echo "pr_data=$PR_DATA" >> $GITHUB_OUTPUT
+          
+          PR_DIFF=$(gh pr diff $PR_NUM --color never 2>/dev/null || echo '')
+          echo "diff_length=${#PR_DIFF}" >> $GITHUB_OUTPUT
+
+      - name: Run Security Review
+        id: security
+        run: |
+          echo "🔒 Running security review..."
+          # Check for common security issues
+          CHANGED_FILES=$(echo '${{ steps.pr-context.outputs.pr_data }}' | jq -r '.files[].path // empty' 2>/dev/null)
+          
+          SECURITY_ISSUES=""
+          
+          # Check for hardcoded secrets
+          if echo "$CHANGED_FILES" | grep -qE '\.(env|key|pem|p12)$'; then
+            SECURITY_ISSUES="${SECURITY_ISSUES}⚠️ **Potential secret file detected**\n"
+          fi
+          
+          # Check for eval/dangerous patterns
+          if gh pr diff ${{ steps.pr-context.outputs.pr_number }} --color never | grep -qE '(eval\s*\(|innerHTML\s*=|dangerouslySetInnerHTML)'; then
+            SECURITY_ISSUES="${SECURITY_ISSUES}🚨 **Dangerous code pattern detected (eval/innerHTML)**\n"
+          fi
+          
+          # Check for console.log in production
+          if gh pr diff ${{ steps.pr-context.outputs.pr_number }} --color never | grep -qE 'console\.(log|warn|error)\s*\('; then
+            SECURITY_ISSUES="${SECURITY_ISSUES}⚠️ **Console statements detected (remove before production)**\n"
+          fi
+          
+          if [ -n "$SECURITY_ISSUES" ]; then
+            echo "issues<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$SECURITY_ISSUES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Performance Review
+        id: performance
+        run: |
+          echo "⚡ Running performance review..."
+          
+          # Get PR size metrics
+          ADDITIONS=$(echo '${{ steps.pr-context.outputs.pr_data }}' | jq -r '.additions // 0')
+          DELETIONS=$(echo '${{ steps.pr-context.outputs.pr_data }}' | jq -r '.deletions // 0')
+          TOTAL_LINES=$((ADDITIONS + DELETIONS))
+          
+          PERF_ISSUES=""
+          
+          # Check for large PRs
+          if [ $TOTAL_LINES -gt 500 ]; then
+            PERF_ISSUES="${PERF_ISSUES}📊 **Large PR** ($TOTAL_LINES lines changed). Consider breaking into smaller PRs.\n"
+          fi
+          
+          # Check for new dependencies
+          if gh pr diff ${{ steps.pr-context.outputs.pr_number }} --color never | grep -qE '^\+.*"(dependencies|devDependencies)"'; then
+            PERF_ISSUES="${PERF_ISSUES}📦 **New dependencies added** - Review bundle size impact\n"
+          fi
+          
+          # Check for TODO comments
+          TODO_COUNT=$(gh pr diff ${{ steps.pr-context.outputs.pr_number }} --color never | grep -cE '(TODO|FIXME|XXX):' || echo "0")
+          if [ "$TODO_COUNT" -gt 0 ]; then
+            PERF_ISSUES="${PERF_ISSUES}📝 **$TODO_COUNT TODO/FIXME comments** - Address or create issues\n"
+          fi
+          
+          if [ -n "$PERF_ISSUES" ]; then
+            echo "issues<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$PERF_ISSUES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Architecture Review
+        id: architecture
+        run: |
+          echo "🏗️ Running architecture review..."
+          
+          ARCH_ISSUES=""
+          CHANGED_FILES=$(echo '${{ steps.pr-context.outputs.pr_data }}' | jq -r '.files[].path // empty' 2>/dev/null)
+          
+          # Check for new files in wrong locations
+          if echo "$CHANGED_FILES" | grep -qE '^src/.*\.(js|jsx)$'; then
+            ARCH_ISSUES="${ARCH_ISSUES}⚠️ **JavaScript files detected** - Use TypeScript (.ts/.tsx) instead\n"
+          fi
+          
+          # Check for proper test coverage
+          SRC_FILES=$(echo "$CHANGED_FILES" | grep -cE '^src/.*\.(ts|tsx)$' || echo "0")
+          TEST_FILES=$(echo "$CHANGED_FILES" | grep -cE '\.test\.(ts|tsx)$' || echo "0")
+          
+          if [ "$SRC_FILES" -gt 0 ] && [ "$TEST_FILES" -eq 0 ]; then
+            ARCH_ISSUES="${ARCH_ISSUES}⚠️ **No tests added** - Add unit tests for new functionality\n"
+          fi
+          
+          # Check for proper error handling
+          if gh pr diff ${{ steps.pr-context.outputs.pr_number }} --color never | grep -qE '^\+.*async\s+' && ! gh pr diff ${{ steps.pr-context.outputs.pr_number }} --color never | grep -qE '(try\s*\{|catch\s*\(|\.catch\s*\('; then
+            ARCH_ISSUES="${ARCH_ISSUES}⚠️ **Async functions without error handling** - Add try/catch blocks\n"
+          fi
+          
+          if [ -n "$ARCH_ISSUES" ]; then
+            echo "issues<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$ARCH_ISSUES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post Review Summary
+        run: |
+          PR_NUM=${{ steps.pr-context.outputs.pr_number }}
+          
+          # Build review comment
+          COMMENT="## 🔍 Automated Code Review Summary\n\n"
+          COMMENT="${COMMENT}Review completed by GitHub Actions bot\n\n"
+          
+          # Security Section
+          COMMENT="${COMMENT}### 🔒 Security Review\n"
+          if [ "${{ steps.security.outputs.has_issues }}" == "true" ]; then
+            COMMENT="${COMMENT}${{ steps.security.outputs.issues }}\n"
+          else
+            COMMENT="${COMMENT}✅ No security issues detected\n\n"
+          fi
+          
+          # Performance Section
+          COMMENT="${COMMENT}### ⚡ Performance Review\n"
+          if [ "${{ steps.performance.outputs.has_issues }}" == "true" ]; then
+            COMMENT="${COMMENT}${{ steps.performance.outputs.issues }}\n"
+          else
+            COMMENT="${COMMENT}✅ No performance issues detected\n\n"
+          fi
+          
+          # Architecture Section
+          COMMENT="${COMMENT}### 🏗️ Architecture Review\n"
+          if [ "${{ steps.architecture.outputs.has_issues }}" == "true" ]; then
+            COMMENT="${COMMENT}${{ steps.architecture.outputs.issues }}\n"
+          else
+            COMMENT="${COMMENT}✅ Architecture looks good\n\n"
+          fi
+          
+          COMMENT="${COMMENT}---\n"
+          COMMENT="${COMMENT}💡 *Comment \`/review\` to re-run the review*"
+          
+          # Post or update comment
+          gh pr comment $PR_NUM --body "$COMMENT" --edit-last || gh pr comment $PR_NUM --body "$COMMENT"
+
+      - name: Add Labels Based on Review
+        run: |
+          PR_NUM=${{ steps.pr-context.outputs.pr_number }}
+          LABELS=""
+          
+          if [ "${{ steps.security.outputs.has_issues }}" == "true" ]; then
+            LABELS="$LABELS,security-review-required"
+          fi
+          
+          if [ "${{ steps.performance.outputs.has_issues }}" == "true" ]; then
+            LABELS="$LABELS,needs-optimization"
+          fi
+          
+          if [ "${{ steps.architecture.outputs.has_issues }}" == "true" ]; then
+            LABELS="$LABELS,needs-refactoring"
+          fi
+          
+          if [ -n "$LABELS" ]; then
+            LABELS=$(echo "$LABELS" | sed 's/^,//')
+            gh pr edit $PR_NUM --add-label "$LABELS" || true
+          fi
+
+  pr-size-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check PR Size
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const additions = context.payload.pull_request.additions;
+            const deletions = context.payload.pull_request.deletions;
+            const totalChanges = additions + deletions;
+            
+            let message = '';
+            let shouldWarn = false;
+            
+            if (totalChanges > 1000) {
+              message = `⚠️ **Large PR Alert**: This PR contains ${totalChanges} lines of changes (${additions} additions, ${deletions} deletions). Consider breaking it into smaller, more focused PRs.`;
+              shouldWarn = true;
+            } else if (totalChanges > 500) {
+              message = `📊 **Medium PR**: This PR contains ${totalChanges} lines of changes. Ensure changes are focused and well-tested.`;
+            }
+            
+            if (shouldWarn) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: message
+              });
+            }

@@ -1,0 +1,145 @@
+# NeuralDeck Code Review Configuration
+# This file configures the automated code review process
+
+version: 1
+review:
+  # Auto-trigger on PR creation
+  auto-trigger: true
+  
+  # Required reviews (will block merge if issues found)
+  required-checks:
+    - security
+    - architecture
+  
+  # Optional reviews (warnings only)
+  optional-checks:
+    - performance
+    - style
+
+  # Review thresholds
+  thresholds:
+    security:
+      level: block      # Block on security issues
+      severity: critical
+    performance:
+      level: warn       # Warn on performance issues
+      max-lines: 500
+    architecture:
+      level: block      # Block on architectural issues
+      require-tests: true
+      require-typescript: true
+    style:
+      level: suggest    # Suggest style improvements
+
+  # Security rules
+  security:
+    checks:
+      - hardcoded-secrets
+      - dangerous-patterns
+      - console-statements
+      - auth-bypasses
+    
+    patterns:
+      - pattern: 'eval\s*\('
+        severity: critical
+        message: 'Eval is dangerous and should not be used'
+      - pattern: 'innerHTML\s*='
+        severity: high
+        message: 'innerHTML can lead to XSS vulnerabilities'
+      - pattern: 'dangerouslySetInnerHTML'
+        severity: high
+        message: 'dangerouslySetInnerHTML is dangerous - ensure content is sanitized'
+      - pattern: '\.env\.(local|production)'
+        severity: critical
+        message: 'Environment files should not be committed'
+
+  # Performance rules
+  performance:
+    checks:
+      - pr-size
+      - bundle-size
+      - dependency-impact
+      - todo-comments
+    
+    limits:
+      max-lines-per-pr: 500
+      max-files-per-pr: 20
+      warning-threshold: 250
+
+  # Architecture rules
+  architecture:
+    checks:
+      - typescript-usage
+      - test-coverage
+      - error-handling
+      - file-location
+    
+    requirements:
+      typescript:
+        enforce: true
+        extensions: ['.ts', '.tsx']
+        forbid: ['.js', '.jsx']
+      
+      tests:
+        require-for-new-files: true
+        pattern: '*.test.{ts,tsx}'
+      
+      structure:
+        src-directory: true
+        no-root-level-js: true
+
+  # Style rules
+  style:
+    checks:
+      - formatting
+      - naming-conventions
+      - comments
+    
+    conventions:
+      components: PascalCase
+      hooks: camelCase-with-use-prefix
+      services: camelCase
+      types: PascalCase
+
+# PR Templates
+templates:
+  default:
+    sections:
+      - description
+      - changes
+      - testing
+      - checklist
+
+# Label mappings
+labels:
+  security-review-required:
+    color: 'd93f0b'
+    description: 'Security review required before merge'
+  
+  needs-optimization:
+    color: 'fbca04'
+    description: 'Performance improvements needed'
+  
+  needs-refactoring:
+    color: '5319e7'
+    description: 'Code structure improvements needed'
+  
+  ready-for-review:
+    color: '0e8a16'
+    description: 'PR is ready for human review'
+
+# Notifications
+notifications:
+  slack: false
+  email: false
+  pr-comments: true
+
+# Integration settings
+integrations:
+  copilot:
+    enabled: true
+    auto-suggestions: true
+  
+  claude:
+    enabled: true
+    agent-review: true
