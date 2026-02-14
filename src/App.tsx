@@ -371,7 +371,9 @@ const AppContent: React.FC = () => {
         const response = await sendChat(chatHistory, {
             provider: activeConfig.provider,
             model: activeConfig.model,
-            baseUrl: activeConfig.baseUrl
+            baseUrl: activeConfig.baseUrl,
+            apiKey: activeConfig.apiKey,
+            cliCommand: activeConfig.cliCommand
         });
 
         await addMessage({ ...response, agentId });
@@ -414,7 +416,9 @@ const AppContent: React.FC = () => {
         const response = await sendChat([...messages, userMsg], {
             provider: activeConfig.provider,
             model: activeConfig.model,
-            baseUrl: activeConfig.baseUrl
+            baseUrl: activeConfig.baseUrl,
+            apiKey: activeConfig.apiKey,
+            cliCommand: activeConfig.cliCommand
         });
 
         await addMessage(response);
