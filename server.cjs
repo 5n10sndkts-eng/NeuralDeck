@@ -2262,6 +2262,8 @@ async function start() {
             targetUrl = GEMINI_OPENAI_BASE_URL;
         } else if (provider === 'openai') {
             targetUrl = 'https://api.openai.com/v1';
+        } else if (provider === 'ollama') {
+            targetUrl = 'http://localhost:11434/v1';
         } else if (provider === 'lmstudio') {
             targetUrl = 'http://192.168.100.190:1234/v1';
         } else {
