@@ -514,11 +514,33 @@ export const retryFailedTasks = async (
     );
 };
 
+// --- V3 INTEGRATION BRIDGE ---
+
+/**
+ * V3-delegated execution: uses V3 SwarmCoordinator for topology-aware
+ * parallel dispatch while keeping the legacy developer task logic.
+ *
+ * When `useV3Coordinator` is true (or globally toggled), the executeSwarm
+ * function delegates batch scheduling to the V3 topology strategy instead
+ * of plain Promise.allSettled.  Individual task execution still goes
+ * through executeDeveloperTask.
+ */
+let _useV3Coordinator = false;
+
+export const enableV3Coordinator = (enabled = true): void => {
+    _useV3Coordinator = enabled;
+    logger.info(`[SwarmEngine] V3 coordinator delegation: ${enabled ? 'enabled' : 'disabled'}`);
+};
+
+export const isV3CoordinatorEnabled = (): boolean => _useV3Coordinator;
+
 export default {
     executeSwarm,
     executeDeveloperTask,
     parseStoryContext,
     retryFailedTasks,
     generateExecutionId,
+    enableV3Coordinator,
+    isV3CoordinatorEnabled,
     DEFAULT_SWARM_CONFIG,
 };
