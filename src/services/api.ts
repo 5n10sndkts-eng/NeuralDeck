@@ -168,12 +168,11 @@ export const sendChat = async (messages: ChatMessage[], config?: LlmConfig): Pro
     const res = await apiFetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          temperature: 0.2,
+      body: JSON.stringify({
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
         config: config || { provider: 'openai', model: 'openai/gpt-oss-20b', baseUrl: 'http://localhost:8000' }
-        }),
-      });
+      }),
+    });
     const data = await safeReadJson(res);
 
     if (!res.ok) {
