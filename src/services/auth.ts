@@ -223,6 +223,9 @@ class AuthService {
 // Export singleton instance
 export const authService = new AuthService();
 
+// Shared pending session promise to prevent multiple concurrent session creations
+let pendingSessionPromise: Promise<any> | null = null;
+
 // Helper function for making authenticated requests
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   // Keep unit tests deterministic by avoiding background session bootstrap calls.
@@ -231,7 +234,13 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   }
 
   if (!authService.isAuthenticated()) {
-    await authService.createSession('anonymous');
+    // Use shared promise to deduplicate concurrent session creation calls
+    if (!pendingSessionPromise) {
+      pendingSessionPromise = authService.createSession('anonymous').finally(() => {
+        pendingSessionPromise = null;
+      });
+    }
+    await pendingSessionPromise;
   }
   return authService.fetch(url, options);
 }

@@ -58,18 +58,8 @@ import { FileNode, ChatMessage, ConnectionProfile, ViewMode, AgentProfile } from
 
 const AppContent: React.FC = () => {
     // --- AUTH INITIALIZATION - Story 6-4 ---
-    useEffect(() => {
-        // Create anonymous session if not authenticated
-        if (!authService.isAuthenticated()) {
-            authService.createSession('anonymous').then((tokens) => {
-                if (tokens) {
-                    console.log('[AUTH] Anonymous session created');
-                } else {
-                    console.warn('[AUTH] Failed to create session');
-                }
-            });
-        }
-    }, []);
+    // Note: authFetch() in services/auth.ts also ensures a session exists.
+    // This eager creation reduces first-request latency.
 
     // --- UI CONTEXT (Adaptive) ---
     const { mode, isAlert, toggleAlert, setActiveAgents: setUIImplActiveAgents } = useUI();

@@ -115,6 +115,22 @@ const TheConnections: React.FC<Props> = ({
                               if (provider === 'lmstudio') {
                                   updates.baseUrl = 'http://localhost:1234/v1';
                               }
+                              // Auto-populate CLI command defaults when switching to CLI providers
+                              const cliDefaults: Record<string, string> = {
+                                  'cli': 'ollama run llama3 "{{prompt}}"',
+                                  'claude-cli': 'claude -p "{{prompt}}"',
+                                  'gemini-cli': 'gemini "{{prompt}}"',
+                                  'codex-cli': 'codex "{{prompt}}"',
+                                  'ollama-cli': 'ollama run llama3 "{{prompt}}"',
+                                  'copilot-cli': 'gh copilot suggest "{{prompt}}"',
+                                  'cursor-cli': 'cursor --prompt "{{prompt}}"',
+                              };
+                              if (cliDefaults[provider]) {
+                                  updates.cliCommand = cliDefaults[provider];
+                              } else {
+                                  // Clear cliCommand when switching to non-CLI provider
+                                  updates.cliCommand = undefined;
+                              }
                               setEditingProfile({...editingProfile, ...updates});
                           }}
                           className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white focus:border-cyber-cyan focus:outline-none"
@@ -126,6 +142,7 @@ const TheConnections: React.FC<Props> = ({
                               <option value="anthropic">Anthropic Claude API</option>
                               <option value="openai">OpenAI API</option>
                               <option value="copilot">GitHub Copilot API</option>
+                              <option value="mock">Mock (Test Mode)</option>
                           </optgroup>
                           <optgroup label="CLI Tools">
                               <option value="cli">Local CLI (Custom)</option>

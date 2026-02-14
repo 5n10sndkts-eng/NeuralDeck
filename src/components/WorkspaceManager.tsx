@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FolderOpen, FolderPlus, Trash2, Clock, GitBranch, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkspace } from '../contexts/WorkspaceContext';
@@ -78,34 +79,38 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ isOpen, onCl
 
   if (!isOpen) return null;
 
-  return (
+  // Use portal to render at document.body level to escape parent overflow:hidden
+  // and any framer-motion transform containment that breaks position:fixed
+  return createPortal(
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <MotionDiv
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[90] flex items-center justify-center p-4"
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
-            onClick={onClose}
-          >
-            <MotionDiv
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              onClick={(e: any) => e.stopPropagation()}
-              className="w-full max-w-3xl max-h-[80vh] overflow-hidden"
-              style={{
-                background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.95) 0%, rgba(5, 5, 14, 0.98) 100%)',
-                border: '1px solid rgba(0, 240, 255, 0.3)',
-                borderRadius: '12px',
-                backdropFilter: 'blur(24px)',
-                boxShadow: '0 0 40px rgba(0, 240, 255, 0.2), 0 20px 60px rgba(0, 0, 0, 0.6)',
-              }}
-            >
+      {/* Plain div overlay - NO framer-motion to avoid inline style overrides on position:fixed */}
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+        style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        }}
+        onClick={onClose}
+      >
+        <MotionDiv
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          onClick={(e: any) => e.stopPropagation()}
+          className="w-full max-w-3xl max-h-[80vh] flex flex-col overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.95) 0%, rgba(5, 5, 14, 0.98) 100%)',
+            border: '1px solid rgba(0, 240, 255, 0.3)',
+            borderRadius: '12px',
+            backdropFilter: 'blur(24px)',
+            boxShadow: '0 0 40px rgba(0, 240, 255, 0.2), 0 20px 60px rgba(0, 0, 0, 0.6)',
+          }}
+        >
               {/* Header */}
-              <div className="px-6 py-5 border-b" style={{ borderColor: 'rgba(0, 240, 255, 0.2)' }}>
+              <div className="px-6 py-5 border-b flex-shrink-0" style={{ borderColor: 'rgba(0, 240, 255, 0.2)' }}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div style={{
@@ -187,7 +192,7 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ isOpen, onCl
               )}
 
               {/* Workspaces list */}
-              <div className="px-6 py-4 overflow-y-auto max-h-96">
+              <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">
                 <div className="flex items-center justify-between mb-3">
                   <span style={{
                     color: '#999',
@@ -305,15 +310,13 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ isOpen, onCl
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 border-t" style={{ borderColor: 'rgba(0, 240, 255, 0.1)' }}>
+              <div className="px-6 py-4 border-t flex-shrink-0" style={{ borderColor: 'rgba(0, 240, 255, 0.1)' }}>
                 <div style={{ color: '#555', fontSize: '11px' }}>
                   💡 <span style={{ color: '#666' }}>Tip: NeuralDeck keeps your workspace separate from its source code for security</span>
                 </div>
               </div>
             </MotionDiv>
-          </MotionDiv>
-        )}
-      </AnimatePresence>
+      </div>
 
       {/* Folder Browser */}
       <AnimatePresence>
@@ -324,6 +327,7 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ isOpen, onCl
           />
         )}
       </AnimatePresence>
-    </>
+    </>,
+    document.body
   );
 };

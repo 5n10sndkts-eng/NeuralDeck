@@ -3,6 +3,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const { exec, spawn } = require('child_process');
 
+// Load environment variables from .env.local
+require('dotenv').config({ path: '.env.local' });
+
 // --- DEFENSIVE MODULES (Safe Require) ---
 const safeRequire = (name) => {
     try { return require(name); }
@@ -2112,13 +2115,9 @@ async function start() {
 
         // --- CLI PROVIDER HANDLING ---
         const cliProviders = ['cli', 'claude-cli', 'gemini-cli', 'codex-cli', 'ollama-cli', 'copilot-cli', 'cursor-cli'];
-        if (cliProviders.includes(provider)) {
+        if (cliProviders.includes(provider) && cliCommand) {
             fastify.log.info(`[GATEWAY] CLI Provider: ${provider}`);
 
-            if (!cliCommand) {
-                reply.code(400).send({ error: 'CLI command template required for CLI providers' });
-                return;
-            }
             if (typeof cliCommand !== 'string') {
                 reply.code(400).send({ error: 'CLI command template must be a string' });
                 return;
@@ -2224,6 +2223,27 @@ async function start() {
             };
         }
 
+        // Warn if CLI provider is missing its command template (falls through to HTTP handler)
+        if (cliProviders.includes(provider) && !cliCommand) {
+            fastify.log.warn(`[GATEWAY] CLI provider '${provider}' missing cliCommand, falling through to HTTP API handler`);
+        }
+
+        // --- MOCK PROVIDER HANDLING ---
+        if (provider === 'mock') {
+            fastify.log.info('[GATEWAY] Mock provider responding');
+            const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+            return {
+                choices: [{
+                    message: {
+                        role: 'assistant',
+                        content: `[MOCK] Received: "${(lastUserMsg?.content || '').substring(0, 100)}". Mock provider is active — configure a real AI provider in System > Connections.`
+                    }
+                }],
+                usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+                model: 'mock'
+            };
+        }
+
         // --- HTTP API PROVIDER HANDLING ---
         // Determine target URL based on provider
         let targetUrl;
@@ -2274,8 +2294,26 @@ async function start() {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                fastify.log.error(`[GATEWAY ERROR] ${errorText}`);
-                reply.code(response.status).send({ error: `Upstream Error: ${errorText}` });
+                fastify.log.error(`[GATEWAY ERROR] ${response.status} from ${targetUrl}: ${errorText}`);
+                // Provide user-friendly error messages for common issues
+                let friendlyError;
+                if (response.status === 405) {
+                    friendlyError = `The server at ${targetUrl} does not support OpenAI-compatible chat completions API (HTTP 405 Method Not Allowed). Please verify this is a valid LLM server (e.g. LM Studio, Ollama, vLLM, or text-generation-webui). Configure your AI provider in the System (⚙️) view > Connections.`;
+                } else if (response.status === 404) {
+                    friendlyError = `The server at ${targetUrl} returned 404 Not Found. It may not support the /v1/chat/completions endpoint. Please check your AI provider configuration in System > Connections.`;
+                } else {
+                    friendlyError = `Upstream Error (${response.status}): ${errorText.substring(0, 200)}`;
+                }
+                reply.code(response.status).send({ error: friendlyError });
+                return;
+            }
+
+            // Validate response is JSON before parsing
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const body = await response.text();
+                fastify.log.error(`[GATEWAY ERROR] Non-JSON response from ${targetUrl}: ${contentType}`);
+                reply.code(502).send({ error: `AI Provider returned non-JSON response (${contentType}). The server at ${targetUrl} may not be an OpenAI-compatible LLM server. Configure your provider in System > Connections.` });
                 return;
             }
 
@@ -2284,7 +2322,7 @@ async function start() {
 
         } catch (error) {
             fastify.log.error(`[GATEWAY FAIL] ${error.message}`);
-            reply.code(500).send({ error: `Failed to connect to AI Provider. Ensure a local LLM server is running at ${targetUrl} or configure an API key in System > Connections.` });
+            reply.code(500).send({ error: `Failed to connect to AI Provider at ${targetUrl}. ${error.message.includes('ECONNREFUSED') ? 'No server is running at this address.' : error.message} Configure your provider in System (⚙️) > Connections.` });
         }
     });
 
@@ -2636,9 +2674,10 @@ async function start() {
 
             const buildResult = await new Promise((resolve) => {
                 let killed = false;
+                let resolved = false;
                 const childProcess = spawn('docker', ['build', '-t', imageTag, '-f', dockerfileName, buildDir], {
-                    ...EXEC_OPTIONS,
                     cwd: buildDir,
+                    env: EXEC_OPTIONS.env,
                     shell: false,
                 });
                 let stdout = '';
@@ -2646,11 +2685,22 @@ async function start() {
                 childProcess.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
                 childProcess.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
 
+                childProcess.on('error', (err) => {
+                    // Handles ENOENT when Docker binary is not installed
+                    if (!resolved) {
+                        resolved = true;
+                        resolve({ error: err, stdout, stderr });
+                    }
+                });
+
                 childProcess.on('close', (code) => {
-                    if (killed) {
-                        resolve({ error: new Error('Docker build timeout after 10 minutes'), stdout, stderr });
-                    } else {
-                        resolve({ error: code !== 0 ? new Error(`Docker build exited with code ${code}`) : null, stdout, stderr });
+                    if (!resolved) {
+                        resolved = true;
+                        if (killed) {
+                            resolve({ error: new Error('Docker build timeout after 10 minutes'), stdout, stderr });
+                        } else {
+                            resolve({ error: code !== 0 ? new Error(`Docker build exited with code ${code}`) : null, stdout, stderr });
+                        }
                     }
                 });
 

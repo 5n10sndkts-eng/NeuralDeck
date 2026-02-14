@@ -289,10 +289,28 @@ export const useSocket = () => {
     useEffect(() => {
         // Connect to backend with JWT auth and exponential backoff (Story 6-6)
         const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-        const token = authService.getToken();
+        let cancelled = false;
+
+        // Ensure auth token is available before connecting socket
+        const connectWithAuth = async () => {
+            let token = authService.getToken();
+            if (!token) {
+                // Wait for auth session to be created (App.tsx creates one on mount)
+                await authService.createSession('anonymous');
+                token = authService.getToken();
+            }
+            if (cancelled) return null;
+            return token;
+        };
+
+        let s: Socket | null = null;
+
+        const initSocket = async () => {
+            const token = await connectWithAuth();
+            if (cancelled) return;
 
         // Story 6-6: Configure reconnection with exponential backoff
-        const s = io(socketUrl, {
+        s = io(socketUrl, {
             auth: {
                 token: token || undefined
             },
@@ -398,14 +416,25 @@ export const useSocket = () => {
 
         s.on('connect_error', (error) => {
             console.error('[Socket] Connection error:', error.message);
-            // If auth error, try to create a session
-            if (error.message.includes('Authentication') && !token) {
-                console.log('[Socket] No token, creating anonymous session...');
-                authService.createSession().then(() => {
-                    // Reconnect with new token
-                    s.auth = { token: authService.getToken() || undefined };
-                    s.connect();
-                });
+            // If auth error, refresh the token and reconnect
+            if (error.message.includes('Authentication') || error.message.includes('Session')) {
+                const currentToken = authService.getToken();
+                if (!currentToken) {
+                    console.log('[Socket] No token, creating anonymous session...');
+                    authService.createSession('anonymous').then(() => {
+                        // Reconnect with new token
+                        s.auth = { token: authService.getToken() || undefined };
+                        s.connect();
+                    });
+                } else {
+                    // Token exists but may be expired, try refreshing
+                    authService.refreshSession().then((refreshed) => {
+                        if (refreshed) {
+                            s.auth = { token: authService.getToken() || undefined };
+                            s.connect();
+                        }
+                    });
+                }
             }
         });
 
@@ -719,8 +748,15 @@ export const useSocket = () => {
             });
         }, 10000); // Check every 10 seconds
 
+        }; // end initSocket
+
+        initSocket();
+
         return () => {
-            s.disconnect();
+            cancelled = true;
+            if (s) {
+                s.disconnect();
+            }
             // Clean up intervals
             if (staleCheckIntervalRef.current) {
                 clearInterval(staleCheckIntervalRef.current);
