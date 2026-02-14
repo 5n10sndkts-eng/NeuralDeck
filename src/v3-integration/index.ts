@@ -5,6 +5,8 @@
  * Current Status: Phase 1 - Adapter Layer Setup
  */
 
+import { logger } from '@/services/logger';
+
 // ============================================================================
 // INTEGRATION OVERVIEW
 // ============================================================================
@@ -77,7 +79,7 @@ export class V3SwarmAdapter {
    */
   async coordinate(operation: any): Promise<any> {
     if (this.v3Enabled) {
-      console.log('[V3] Swarm coordination with adapter layer');
+      logger.info('[V3] Swarm coordination with adapter layer');
       // Log usage for migration tracking
       this.trackMigration('swarm.coordinate', operation);
     }
@@ -91,7 +93,7 @@ export class V3SwarmAdapter {
    */
   private trackMigration(api: string, data: any): void {
     // TODO: Send to migration analytics
-    console.log(`[V3 Migration] API used: ${api}`);
+    logger.info(`[V3 Migration] API used: ${api}`);
   }
 }
 
@@ -109,7 +111,7 @@ export class V3MemoryAdapter {
 
   async search(query: string, options?: any): Promise<any[]> {
     if (this.v3Enabled) {
-      console.log('[V3] Memory search with AgentDB preparation');
+      logger.info('[V3] Memory search with AgentDB preparation');
     }
     
     return this.legacyMemory.search(query, options);
@@ -117,7 +119,7 @@ export class V3MemoryAdapter {
 
   async store(key: string, value: any): Promise<void> {
     if (this.v3Enabled) {
-      console.log('[V3] Memory store with AgentDB preparation');
+      logger.info('[V3] Memory store with AgentDB preparation');
     }
     
     return this.legacyMemory.store(key, value);
@@ -190,28 +192,28 @@ export interface MigrationProgress {
 // ============================================================================
 
 export function initializeV3Integration(): void {
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('  NeuralDeck V3 Deep Integration');
-  console.log('  Status: Phase 1 - Adapter Layer');
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('');
-  console.log('Current Phase:', V3_CONFIG.phase);
-  console.log('Backward Compatibility:', V3_CONFIG.backwardCompatibility ? 'enabled' : 'disabled');
-  console.log('');
-  console.log('Features:');
-  console.log('  • SONA Learning:', V3_CONFIG.features.sona ? 'enabled' : 'pending');
-  console.log('  • Flash Attention:', V3_CONFIG.features.flashAttention ? 'enabled' : 'pending');
-  console.log('  • AgentDB:', V3_CONFIG.features.agentDB ? 'enabled' : 'pending');
-  console.log('  • MCP Tools:', V3_CONFIG.features.mcpTools ? 'enabled' : 'pending');
-  console.log('');
-  console.log('Target Metrics:');
-  console.log('  • Code Lines: 15,000+ → <5,000 (66% reduction)');
-  console.log('  • Flash Attention: 2.49x-7.47x speedup');
-  console.log('  • AgentDB Search: 150x-12,500x improvement');
-  console.log('  • Memory Usage: 50-75% reduction');
-  console.log('  • SONA Adaptation: <0.05ms');
-  console.log('');
-  console.log('═══════════════════════════════════════════════════════');
+  logger.info('═══════════════════════════════════════════════════════');
+  logger.info('  NeuralDeck V3 Deep Integration');
+  logger.info('  Status: Phase 1 - Adapter Layer');
+  logger.info('═══════════════════════════════════════════════════════');
+  logger.info('');
+  logger.info('Current Phase:', V3_CONFIG.phase);
+  logger.info('Backward Compatibility:', V3_CONFIG.backwardCompatibility ? 'enabled' : 'disabled');
+  logger.info('');
+  logger.info('Features:');
+  logger.info('  • SONA Learning:', V3_CONFIG.features.sona ? 'enabled' : 'pending');
+  logger.info('  • Flash Attention:', V3_CONFIG.features.flashAttention ? 'enabled' : 'pending');
+  logger.info('  • AgentDB:', V3_CONFIG.features.agentDB ? 'enabled' : 'pending');
+  logger.info('  • MCP Tools:', V3_CONFIG.features.mcpTools ? 'enabled' : 'pending');
+  logger.info('');
+  logger.info('Target Metrics:');
+  logger.info('  • Code Lines: 15,000+ → <5,000 (66% reduction)');
+  logger.info('  • Flash Attention: 2.49x-7.47x speedup');
+  logger.info('  • AgentDB Search: 150x-12,500x improvement');
+  logger.info('  • Memory Usage: 50-75% reduction');
+  logger.info('  • SONA Adaptation: <0.05ms');
+  logger.info('');
+  logger.info('═══════════════════════════════════════════════════════');
 }
 
 // Initialize on module load

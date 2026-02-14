@@ -11,6 +11,7 @@ import ReactFlow, {
     Position,
     getBezierPath,
 } from 'reactflow';
+import { logger } from '@/services/logger';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { AgentProfile, FileNode, AgentNodeData, AgentNodeState, NeuralPhase, ToolHistoryEntry } from '../types';
@@ -303,7 +304,7 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
         if (pendingStories.length > 0) {
             const spawnedIds = spawnDeveloperNodesFromStories(pendingStories);
             if (spawnedIds.length > 0) {
-                console.log(`[NeuralGrid] Spawned ${spawnedIds.length} developer nodes for pending stories`);
+                logger.info(`[NeuralGrid] Spawned ${spawnedIds.length} developer nodes for pending stories`);
             }
         }
     }, [stories, getPendingStories, spawnDeveloperNodesFromStories]);

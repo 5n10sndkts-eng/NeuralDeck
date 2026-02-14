@@ -6,6 +6,7 @@
  */
 
 import { Agent } from './agent-registry';
+import { logger } from '@/services/logger';
 
 export type MessagePriority = 'critical' | 'high' | 'medium' | 'low';
 export type MessageType = 
@@ -67,7 +68,7 @@ export class CommunicationBus {
       this.processQueue();
     }, this.processIntervalMs);
 
-    console.log('[CommunicationBus] Started');
+    logger.info('[CommunicationBus] Started');
   }
 
   /**
@@ -82,7 +83,7 @@ export class CommunicationBus {
       this.processInterval = null;
     }
 
-    console.log('[CommunicationBus] Stopped');
+    logger.info('[CommunicationBus] Stopped');
   }
 
   /**
@@ -204,7 +205,7 @@ export class CommunicationBus {
       try {
         handler(message);
       } catch (error) {
-        console.error('[CommunicationBus] Handler error:', error);
+        logger.error('[CommunicationBus] Handler error:', error);
       }
     }
 

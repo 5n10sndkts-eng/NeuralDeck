@@ -3,6 +3,8 @@
  * Handles auto-cleanup, quota monitoring, and storage optimization
  */
 
+import { logger } from '@/services/logger';
+
 const RETENTION_PERIOD_KEY = 'neuraldeck_retention_period';
 const DEFAULT_RETENTION_DAYS = 30;
 const LAST_CLEANUP_KEY = 'neuraldeck_last_cleanup';
@@ -38,7 +40,7 @@ export class StorageManager {
    */
   setRetentionPeriod(days: number): void {
     localStorage.setItem(RETENTION_PERIOD_KEY, days.toString());
-    console.log('[StorageManager] Retention period set to', days, 'days');
+    logger.info('[StorageManager] Retention period set to', days, 'days');
   }
 
   /**
@@ -122,15 +124,15 @@ export class StorageManager {
    */
   initAutoCleanup(cleanupCallback: () => Promise<number>): void {
     if (this.isCleanupDue()) {
-      console.log('[StorageManager] Auto-cleanup is due, running...');
+      logger.info('[StorageManager] Auto-cleanup is due, running...');
       cleanupCallback().then(count => {
-        console.log(`[StorageManager] Auto-cleanup completed, removed ${count} sessions`);
+        logger.info(`[StorageManager] Auto-cleanup completed, removed ${count} sessions`);
         this.markCleanupCompleted();
       }).catch(error => {
-        console.error('[StorageManager] Auto-cleanup failed:', error);
+        logger.error('[StorageManager] Auto-cleanup failed:', error);
       });
     } else {
-      console.log('[StorageManager] Auto-cleanup not due');
+      logger.info('[StorageManager] Auto-cleanup not due');
     }
   }
 

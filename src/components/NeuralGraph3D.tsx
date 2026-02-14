@@ -5,6 +5,7 @@ import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { SwarmNode } from '../hooks/useSwarm';
 import { ThoughtNode } from './ThoughtNode';
 import { SimpleSynapse } from './Synapse';
+import { logger } from '@/services/logger';
 
 interface Props {
     nodes: SwarmNode[];
@@ -40,7 +41,7 @@ export const NeuralGraph3D: React.FC<Props> = ({ nodes, edges }) => {
                         <ThoughtNode
                             key={node.id}
                             node={node}
-                            onClick={(n) => console.log('Clicked node:', n)}
+                            onClick={(n) => logger.info('Clicked node:', n)}
                         />
                     ))}
 

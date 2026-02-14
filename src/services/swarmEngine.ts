@@ -12,6 +12,7 @@ import { DeveloperSwarmNode } from '../hooks/useSwarm';
 import { sendChat, readFile, writeFile } from './api';
 import { authFetch } from './auth';
 import { AGENT_DEFINITIONS } from './agent';
+import { logger } from '@/services/logger';
 
 // --- FILE LOCK INTEGRATION (AC: 3) ---
 
@@ -33,7 +34,7 @@ export const checkFileLock = async (filePath: string): Promise<FileLock | null> 
         }
         return null;
     } catch (error) {
-        console.warn(`[SwarmEngine] Could not check file lock: ${error}`);
+        logger.warn(`[SwarmEngine] Could not check file lock: ${error}`);
         return null;
     }
 };
@@ -50,7 +51,7 @@ export const acquireFileLock = async (filePath: string, agentId: string): Promis
         });
         return response.ok;
     } catch (error) {
-        console.warn(`[SwarmEngine] Could not acquire file lock: ${error}`);
+        logger.warn(`[SwarmEngine] Could not acquire file lock: ${error}`);
         return false;
     }
 };
@@ -67,7 +68,7 @@ export const releaseFileLock = async (filePath: string, agentId: string): Promis
         });
         return response.ok;
     } catch (error) {
-        console.warn(`[SwarmEngine] Could not release file lock: ${error}`);
+        logger.warn(`[SwarmEngine] Could not release file lock: ${error}`);
         return false;
     }
 };
@@ -84,7 +85,7 @@ export const getAllFileLocks = async (): Promise<FileLock[]> => {
         }
         return [];
     } catch (error) {
-        console.warn(`[SwarmEngine] Could not get file locks: ${error}`);
+        logger.warn(`[SwarmEngine] Could not get file locks: ${error}`);
         return [];
     }
 };
@@ -176,7 +177,7 @@ export const parseStoryContext = async (story: StoryMetadata): Promise<Developer
         // Read story file content
         storyContent = await readFile(story.path);
     } catch (e) {
-        console.warn(`[SwarmEngine] Could not read story file: ${story.path}`);
+        logger.warn(`[SwarmEngine] Could not read story file: ${story.path}`);
     }
 
     // Extract acceptance criteria from content
@@ -220,7 +221,7 @@ export const executeDeveloperTask = async (
     const log = (msg: string) => {
         logs.push(`[${new Date().toISOString()}] ${msg}`);
         onLog?.(context.nodeId, msg);
-        console.log(`[SwarmEngine] [${context.storyId}] ${msg}`);
+        logger.info(`[SwarmEngine] [${context.storyId}] ${msg}`);
     };
 
     try {
@@ -386,15 +387,15 @@ export const executeSwarm = async (
     const executionId = generateExecutionId();
     const startTime = Date.now();
 
-    console.log(`[SwarmEngine] Starting swarm execution: ${executionId}`);
-    console.log(`[SwarmEngine] Processing ${stories.length} stories with max concurrency: ${config.maxConcurrency}`);
+    logger.info(`[SwarmEngine] Starting swarm execution: ${executionId}`);
+    logger.info(`[SwarmEngine] Processing ${stories.length} stories with max concurrency: ${config.maxConcurrency}`);
 
     // Parse story contexts
     const contexts = await Promise.all(
         stories.map(story => parseStoryContext(story))
     );
 
-    console.log(`[SwarmEngine] Parsed ${contexts.length} story contexts`);
+    logger.info(`[SwarmEngine] Parsed ${contexts.length} story contexts`);
 
     // Execute all tasks in parallel using Promise.allSettled (AC: 1, 5)
     // This ensures one failure doesn't stop other tasks
@@ -472,10 +473,10 @@ export const executeSwarm = async (
         averageSingleTaskTime,
     };
 
-    console.log(`[SwarmEngine] Swarm execution complete: ${executionId}`);
-    console.log(`[SwarmEngine] Results: ${successCount} success, ${failureCount} failed`);
-    console.log(`[SwarmEngine] Total duration: ${totalDuration}ms`);
-    console.log(`[SwarmEngine] Parallelism verified (NFR-1): ${parallelismVerified}`);
+    logger.info(`[SwarmEngine] Swarm execution complete: ${executionId}`);
+    logger.info(`[SwarmEngine] Results: ${successCount} success, ${failureCount} failed`);
+    logger.info(`[SwarmEngine] Total duration: ${totalDuration}ms`);
+    logger.info(`[SwarmEngine] Parallelism verified (NFR-1): ${parallelismVerified}`);
 
     return executionResult;
 };
@@ -498,11 +499,11 @@ export const retryFailedTasks = async (
     const storiesToRetry = stories.filter(s => failedStoryIds.includes(s.id));
 
     if (storiesToRetry.length === 0) {
-        console.log('[SwarmEngine] No failed tasks to retry');
+        logger.info('[SwarmEngine] No failed tasks to retry');
         return previousResult;
     }
 
-    console.log(`[SwarmEngine] Retrying ${storiesToRetry.length} failed tasks`);
+    logger.info(`[SwarmEngine] Retrying ${storiesToRetry.length} failed tasks`);
 
     return executeSwarm(
         storiesToRetry,

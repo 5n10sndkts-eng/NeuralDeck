@@ -6,6 +6,7 @@
  */
 
 import { Agent, AgentTask } from './agent-registry';
+import { logger } from '@/services/logger';
 
 export interface LoadDistribution {
   agentId: number;
@@ -47,7 +48,7 @@ export class LoadBalancer {
       this.checkAndRebalance();
     }, this.config.checkIntervalMs);
 
-    console.log('[LoadBalancer] Started');
+    logger.info('[LoadBalancer] Started');
   }
 
   /**
@@ -58,7 +59,7 @@ export class LoadBalancer {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
-    console.log('[LoadBalancer] Stopped');
+    logger.info('[LoadBalancer] Stopped');
   }
 
   /**
@@ -142,7 +143,7 @@ export class LoadBalancer {
     );
 
     if (overloaded.length > 0 && underloaded.length > 0) {
-      console.log(`[LoadBalancer] Rebalancing: ${overloaded.length} overloaded, ${underloaded.length} underloaded`);
+      logger.info(`[LoadBalancer] Rebalancing: ${overloaded.length} overloaded, ${underloaded.length} underloaded`);
     }
   }
 

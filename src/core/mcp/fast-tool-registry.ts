@@ -5,6 +5,8 @@
  * and LRU caching for optimal performance with 200+ tools.
  */
 
+import { logger } from '@/services/logger';
+
 interface ToolMetadata {
   name: string;
   description: string;
@@ -228,7 +230,7 @@ export class FastToolRegistry {
     }
 
     const duration = performance.now() - start;
-    console.log(`[FastToolRegistry] Index built in ${duration.toFixed(2)}ms for ${tools.length} tools`);
+    logger.info(`[FastToolRegistry] Index built in ${duration.toFixed(2)}ms for ${tools.length} tools`);
   }
 
   /**

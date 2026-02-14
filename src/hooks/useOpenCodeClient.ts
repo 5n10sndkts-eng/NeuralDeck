@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { logger } from '@/services/logger';
 
 // Type definitions (matching @opencode-ai/sdk types)
 interface Session {
@@ -96,13 +97,13 @@ export function useOpenCodeClient(): UseOpenCodeClientReturn {
         setIsConnected(true);
         setClient(connectedClient);
         setError(null);
-        console.log('✓ OpenCode connected:', connectedBaseUrl);
+        logger.info('✓ OpenCode connected:', connectedBaseUrl);
 
         // Load existing sessions
         const sessionsList = await connectedClient.session.list();
         setSessions(sessionsList.data || []);
       } catch (err: any) {
-        console.error('OpenCode connection failed:', err.message);
+        logger.error('OpenCode connection failed:', err.message);
         setError(err.message);
         setIsConnected(false);
       }
@@ -136,7 +137,7 @@ export function useOpenCodeClient(): UseOpenCodeClientReturn {
       
       return newSession;
     } catch (err: any) {
-      console.error('Failed to create session:', err.message);
+      logger.error('Failed to create session:', err.message);
       throw err;
     }
   }, [client]);
@@ -166,7 +167,7 @@ export function useOpenCodeClient(): UseOpenCodeClientReturn {
       
       return result.data;
     } catch (err: any) {
-      console.error('Failed to send message:', err.message);
+      logger.error('Failed to send message:', err.message);
       throw err;
     }
   }, [client]);
@@ -183,7 +184,7 @@ export function useOpenCodeClient(): UseOpenCodeClientReturn {
       const result = await client.session.messages({ path: { id: sessionId } });
       return result.data || [];
     } catch (err: any) {
-      console.error(`Failed to get messages for session ${sessionId}:`, err.message);
+      logger.error(`Failed to get messages for session ${sessionId}:`, err.message);
       return [];
     }
   }, [client]);
@@ -201,7 +202,7 @@ export function useOpenCodeClient(): UseOpenCodeClientReturn {
       setSessions(prev => prev.filter(s => s.id !== sessionId));
       return true;
     } catch (err: any) {
-      console.error(`Failed to delete session ${sessionId}:`, err.message);
+      logger.error(`Failed to delete session ${sessionId}:`, err.message);
       return false;
     }
   }, [client]);
@@ -216,7 +217,7 @@ export function useOpenCodeClient(): UseOpenCodeClientReturn {
       const result = await client.session.list();
       setSessions(result.data || []);
     } catch (err: any) {
-      console.error('Failed to refresh sessions:', err.message);
+      logger.error('Failed to refresh sessions:', err.message);
     }
   }, [client]);
 

@@ -3,6 +3,7 @@ import { useSocket } from './useSocket';
 import { AgentProfile, AgentNodeState } from '../types';
 import { StoryMetadata } from './useStoryWatcher';
 import { triggerThink, Thought } from '../services/api';
+import { logger } from '@/services/logger';
 
 export interface SwarmNode {
     id: string;
@@ -114,7 +115,7 @@ export const useSwarm = () => {
         // Track spawn timing for performance monitoring (AC: 5)
         spawnTimestamps.current.push(spawnTime);
 
-        console.log(`[useSwarm] Spawned developer node: ${nodeId} for story: ${story.title}`);
+        logger.info(`[useSwarm] Spawned developer node: ${nodeId} for story: ${story.title}`);
 
         return nodeId;
     }, [generateDeveloperNodeId]);
@@ -126,7 +127,7 @@ export const useSwarm = () => {
     const removeDeveloperNode = useCallback((storyId: string): boolean => {
         const nodeId = storyToDevMap.get(storyId);
         if (!nodeId) {
-            console.warn(`[useSwarm] No developer node found for story: ${storyId}`);
+            logger.warn(`[useSwarm] No developer node found for story: ${storyId}`);
             return false;
         }
 
@@ -137,7 +138,7 @@ export const useSwarm = () => {
             return newMap;
         });
 
-        console.log(`[useSwarm] Removed developer node: ${nodeId} for story: ${storyId}`);
+        logger.info(`[useSwarm] Removed developer node: ${nodeId} for story: ${storyId}`);
         return true;
     }, [storyToDevMap]);
 
@@ -185,7 +186,7 @@ export const useSwarm = () => {
         stories.forEach(story => {
             // Skip if already has a developer node
             if (storyToDevMap.has(story.id)) {
-                console.log(`[useSwarm] Developer node already exists for story: ${story.id}`);
+                logger.info(`[useSwarm] Developer node already exists for story: ${story.id}`);
                 return;
             }
 
@@ -194,11 +195,11 @@ export const useSwarm = () => {
         });
 
         const duration = Date.now() - startTime;
-        console.log(`[useSwarm] Spawned ${nodeIds.length} developer nodes in ${duration}ms`);
+        logger.info(`[useSwarm] Spawned ${nodeIds.length} developer nodes in ${duration}ms`);
 
         // Performance warning if over 2 second target
         if (duration > 2000) {
-            console.warn(`[useSwarm] Node spawning exceeded 2s target: ${duration}ms`);
+            logger.warn(`[useSwarm] Node spawning exceeded 2s target: ${duration}ms`);
         }
 
         return nodeIds;
@@ -260,7 +261,7 @@ export const useSwarm = () => {
             });
 
         } catch (error) {
-            console.error("[useSwarm] Reasoning failed:", error);
+            logger.error("[useSwarm] Reasoning failed:", error);
         }
     }, []);
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useReducer } from 'react';
 import { ChatMessage } from '../types';
 import { useConversationStorage, Session, StorageType } from '../hooks/useConversationStorage';
+import { logger } from '@/services/logger';
 
 const LAST_SESSION_KEY = 'neuraldeck_last_session';
 
@@ -93,7 +94,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     const init = async () => {
       if (!storage.isAvailable) {
-        console.warn('[Conversation] Storage not available');
+        logger.warn('[Conversation] Storage not available');
         dispatch({ type: 'SET_LOADING', payload: false });
         return;
       }
@@ -118,7 +119,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           await newSession('Welcome Session');
         }
       } catch (error) {
-        console.error('[Conversation] Initialization error:', error);
+        logger.error('[Conversation] Initialization error:', error);
       } finally {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
@@ -135,9 +136,9 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       dispatch({ type: 'SET_MESSAGES', payload: messages });
       dispatch({ type: 'SET_CURRENT_SESSION', payload: sessionId });
       localStorage.setItem(LAST_SESSION_KEY, sessionId);
-      console.log('[Conversation] Loaded session:', sessionId, 'with', messages.length, 'messages');
+      logger.info('[Conversation] Loaded session:', sessionId, 'with', messages.length, 'messages');
     } catch (error) {
-      console.error('[Conversation] Error loading session:', error);
+      logger.error('[Conversation] Error loading session:', error);
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -159,10 +160,10 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       dispatch({ type: 'SET_CURRENT_SESSION', payload: session.id });
       dispatch({ type: 'SET_MESSAGES', payload: [] });
       localStorage.setItem(LAST_SESSION_KEY, session.id);
-      console.log('[Conversation] Created new session:', session.id);
+      logger.info('[Conversation] Created new session:', session.id);
       return session.id;
     } catch (error) {
-      console.error('[Conversation] Error creating session:', error);
+      logger.error('[Conversation] Error creating session:', error);
       return null;
     }
   }, [storage]);
@@ -172,10 +173,10 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     let sessionId = state.currentSessionId;
 
     if (!sessionId) {
-      console.warn('[Conversation] No active session, creating new one');
+      logger.warn('[Conversation] No active session, creating new one');
       sessionId = await newSession();
       if (!sessionId) {
-        console.error('[Conversation] Failed to create session, message dropped');
+        logger.error('[Conversation] Failed to create session, message dropped');
         return;
       }
     }
@@ -190,7 +191,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         dispatch({ type: 'UPDATE_SESSION', payload: updatedSession });
       }
     } catch (error) {
-      console.error('[Conversation] Error adding message:', error);
+      logger.error('[Conversation] Error adding message:', error);
     }
   }, [state.currentSessionId, storage, newSession]);
 
@@ -201,7 +202,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const sessions = await storage.listSessions();
       dispatch({ type: 'SET_SESSIONS', payload: sessions });
     } catch (error) {
-      console.error('[Conversation] Error renaming session:', error);
+      logger.error('[Conversation] Error renaming session:', error);
     }
   }, [storage]);
 
@@ -221,7 +222,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       }
     } catch (error) {
-      console.error('[Conversation] Error deleting session:', error);
+      logger.error('[Conversation] Error deleting session:', error);
     }
   }, [storage, state.currentSessionId, loadSession, newSession]);
 
@@ -248,9 +249,9 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      console.log('[Conversation] Session exported:', sessionId);
+      logger.info('[Conversation] Session exported:', sessionId);
     } catch (error) {
-      console.error('[Conversation] Error exporting session:', error);
+      logger.error('[Conversation] Error exporting session:', error);
     }
   }, [storage]);
 
@@ -268,7 +269,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         dispatch({ type: 'UPDATE_SESSION', payload: updatedSession });
       }
     } catch (error) {
-      console.error('[Conversation] Error clearing session:', error);
+      logger.error('[Conversation] Error clearing session:', error);
     }
   }, [state.currentSessionId, storage]);
 
@@ -278,7 +279,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const sessions = await storage.listSessions();
       dispatch({ type: 'SET_SESSIONS', payload: sessions });
     } catch (error) {
-      console.error('[Conversation] Error refreshing sessions:', error);
+      logger.error('[Conversation] Error refreshing sessions:', error);
     }
   }, [storage]);
 

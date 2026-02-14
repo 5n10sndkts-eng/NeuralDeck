@@ -9,6 +9,7 @@ import {
     ToolCompletedEvent,
     ToolOutputChunk,
 } from '../types';
+import { logger } from '@/services/logger';
 
 const MAX_HISTORY_PER_AGENT = 10;
 const OUTPUT_PREVIEW_LENGTH = 200;
@@ -64,7 +65,7 @@ export const useToolExecution = (): UseToolExecutionReturn => {
 
         agentExecutionMap.current.set(event.agentId, event.executionId);
 
-        console.log(`[TOOL] Started: ${event.toolName} for agent ${event.agentId}`);
+        logger.info(`[TOOL] Started: ${event.toolName} for agent ${event.agentId}`);
     }, []);
 
     // Handle tool:output event
@@ -138,7 +139,7 @@ export const useToolExecution = (): UseToolExecutionReturn => {
                 next.delete(event.executionId);
                 agentExecutionMap.current.delete(event.agentId);
 
-                console.log(`[TOOL] Completed: ${execution.toolName} - ${event.status} (${event.duration}ms)`);
+                logger.info(`[TOOL] Completed: ${execution.toolName} - ${event.status} (${event.duration}ms)`);
             }
 
             return next;

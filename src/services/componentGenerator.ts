@@ -7,6 +7,7 @@
 
 import type { VisionAnalysisResult, ComponentDescription } from './visionAnalyzer';
 import { authFetch } from './auth';
+import { logger } from '@/services/logger';
 
 export interface GeneratedComponent {
   name: string;
@@ -270,12 +271,12 @@ export async function saveGeneratedComponent(
 
     const result = await response.json();
     
-    console.log(`[GENERATED] ${result.path}`);
+    logger.info(`[GENERATED] ${result.path}`);
     if (result.backupCreated) {
-      console.log('[BACKUP] Created before overwrite');
+      logger.info('[BACKUP] Created before overwrite');
     }
     if (result.wasVersioned) {
-      console.log('[VERSIONED] Created timestamped copy');
+      logger.info('[VERSIONED] Created timestamped copy');
     }
 
     return {
@@ -284,7 +285,7 @@ export async function saveGeneratedComponent(
       backupCreated: result.backupCreated || false
     };
   } catch (error) {
-    console.error('[ComponentGenerator] Save error:', error);
+    logger.error('[ComponentGenerator] Save error:', error);
     throw error;
   }
 }
@@ -303,7 +304,7 @@ export async function checkComponentExists(filePath: string): Promise<boolean> {
     const result = await response.json();
     return result.exists;
   } catch (error) {
-    console.error('[ComponentGenerator] File check error:', error);
+    logger.error('[ComponentGenerator] File check error:', error);
     return false;
   }
 }

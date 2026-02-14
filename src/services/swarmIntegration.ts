@@ -23,6 +23,7 @@ import { StoryMetadata } from '../hooks/useStoryWatcher';
 import { LlmConfig, AgentAction, LlmProvider } from '../types';
 import { sendChat } from './api';
 import { executeAgentTask } from './agentTaskHandlers';
+import { logger } from '@/services/logger';
 
 export interface SwarmIntegrationConfig {
   enableRealtimeUpdates: boolean;
@@ -124,7 +125,7 @@ export class SwarmIntegrationService {
     this.setupCoordinatorCallbacks();
 
     this.isInitialized = true;
-    console.log('[SwarmIntegration] Service initialized');
+    logger.info('[SwarmIntegration] Service initialized');
   }
 
   /**
@@ -142,7 +143,7 @@ export class SwarmIntegrationService {
       this.llmConfig = options.llmConfig;
     }
 
-    console.log('[SwarmIntegration] Starting V3 swarm execution');
+    logger.info('[SwarmIntegration] Starting V3 swarm execution');
 
     // Register actual agent task handlers
     this.registerAgentTaskHandlers();
@@ -170,7 +171,7 @@ export class SwarmIntegrationService {
       // Generate efficiency report
       if (this.efficiencyMonitor) {
         const report = this.efficiencyMonitor.generateReport();
-        console.log('[SwarmIntegration] Efficiency report:', report);
+        logger.info('[SwarmIntegration] Efficiency report:', report);
       }
 
       return result;
@@ -198,7 +199,7 @@ export class SwarmIntegrationService {
       throw new Error('Legacy integration is disabled');
     }
 
-    console.log(`[SwarmIntegration] Executing developer swarm for ${stories.length} stories`);
+    logger.info(`[SwarmIntegration] Executing developer swarm for ${stories.length} stories`);
 
     // Use legacy swarm engine with V3 optimizations
     const legacyConfig: LegacySwarmConfig = {
@@ -289,7 +290,7 @@ export class SwarmIntegrationService {
   async rebalanceWorkload(): Promise<void> {
     // Start load balancer if not already running
     this.loadBalancer.start();
-    console.log('[SwarmIntegration] Load balancer started for dynamic rebalancing');
+    logger.info('[SwarmIntegration] Load balancer started for dynamic rebalancing');
   }
 
   /**
@@ -320,7 +321,7 @@ export class SwarmIntegrationService {
     // CommunicationBus doesn't have a clear method, just stop and restart
     this.commBus.stop();
     this.efficiencyMonitor?.reset();
-    console.log('[SwarmIntegration] Swarm reset');
+    logger.info('[SwarmIntegration] Swarm reset');
   }
 
   // Private methods
@@ -388,7 +389,7 @@ export class SwarmIntegrationService {
       throw new Error(`Agent ${agentId} not found`);
     }
 
-    console.log(`[SwarmIntegration] Executing task for agent #${agentId}: ${agent.name}`);
+    logger.info(`[SwarmIntegration] Executing task for agent #${agentId}: ${agent.name}`);
 
     try {
       // Build context for the agent
@@ -422,7 +423,7 @@ export class SwarmIntegrationService {
           await this.executeGenericAgent(context);
       }
     } catch (error) {
-      console.error(`[SwarmIntegration] Agent #${agentId} task execution failed:`, error);
+      logger.error(`[SwarmIntegration] Agent #${agentId} task execution failed:`, error);
       throw error;
     }
   }
@@ -584,7 +585,7 @@ Return a JSON object with:
         context.onAction(action);
       }
     } catch (error) {
-      console.error('[SwarmIntegration] LLM task execution failed:', error);
+      logger.error('[SwarmIntegration] LLM task execution failed:', error);
       throw error;
     }
   }
@@ -613,7 +614,7 @@ Return a JSON object with:
       try {
         listener(status);
       } catch (error) {
-        console.error('[SwarmIntegration] Status listener error:', error);
+        logger.error('[SwarmIntegration] Status listener error:', error);
       }
     });
 
@@ -639,7 +640,7 @@ Return a JSON object with:
         this.broadcastStatus();
         break;
       default:
-        console.warn(`[SwarmIntegration] Unknown command: ${command.type}`);
+        logger.warn(`[SwarmIntegration] Unknown command: ${command.type}`);
     }
   }
 

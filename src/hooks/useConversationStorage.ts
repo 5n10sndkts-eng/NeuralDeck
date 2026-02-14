@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Dexie, { Table } from 'dexie';
 import { ChatMessage } from '../types';
+import { logger } from '@/services/logger';
 
 // Session metadata interface
 export interface Session {
@@ -54,9 +55,9 @@ export const useConversationStorage = () => {
         await testDB.sessions.toArray();
         setStorageType('indexeddb');
         setIsAvailable(true);
-        console.log('[Storage] IndexedDB available');
+        logger.info('[Storage] IndexedDB available');
       } catch (error) {
-        console.warn('[Storage] IndexedDB unavailable, falling back to localStorage', error);
+        logger.warn('[Storage] IndexedDB unavailable, falling back to localStorage', error);
         setStorageType('localstorage');
         setIsAvailable(typeof window !== 'undefined' && !!window.localStorage);
       }
@@ -84,7 +85,7 @@ export const useConversationStorage = () => {
       localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
     }
 
-    console.log('[Storage] Session created:', session.id);
+    logger.info('[Storage] Session created:', session.id);
     return session;
   }, [storageType]);
 
@@ -123,7 +124,7 @@ export const useConversationStorage = () => {
       localStorage.setItem(SESSIONS_KEY, JSON.stringify(filtered));
       localStorage.removeItem(`${MESSAGES_PREFIX}${id}`);
     }
-    console.log('[Storage] Session deleted:', id);
+    logger.info('[Storage] Session deleted:', id);
   }, [storageType]);
 
   const listSessions = useCallback(async (): Promise<Session[]> => {
@@ -137,7 +138,7 @@ export const useConversationStorage = () => {
         const sessions = JSON.parse(data) as Session[];
         return sessions.sort((a, b) => b.updatedAt - a.updatedAt);
       } catch (error) {
-        console.error('[Storage] Error parsing sessions from localStorage', error);
+        logger.error('[Storage] Error parsing sessions from localStorage', error);
         return [];
       }
     }
@@ -198,7 +199,7 @@ export const useConversationStorage = () => {
         }
         return messages;
       } catch (error) {
-        console.error('[Storage] Error parsing messages from localStorage', error);
+        logger.error('[Storage] Error parsing messages from localStorage', error);
         return [];
       }
     }
@@ -243,7 +244,7 @@ export const useConversationStorage = () => {
       await deleteSession(session.id);
     }
     
-    console.log(`[Storage] Cleaned up ${toDelete.length} old sessions`);
+    logger.info(`[Storage] Cleaned up ${toDelete.length} old sessions`);
     return toDelete.length;
   }, [listSessions, deleteSession]);
 

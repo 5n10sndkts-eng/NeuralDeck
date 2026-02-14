@@ -5,6 +5,8 @@
  * and intelligent connection reuse for optimal performance.
  */
 
+import { logger } from '@/services/logger';
+
 interface ConnectionPoolConfig {
   maxConnections: number;
   minConnections: number;
@@ -148,14 +150,14 @@ export class ConnectionPool {
           };
           this.pool.set(pooledConn.id, pooledConn);
         }).catch(err => {
-          console.warn(`[ConnectionPool] Failed to pre-warm connection ${i}:`, err);
+          logger.warn(`[ConnectionPool] Failed to pre-warm connection ${i}:`, err);
         })
       );
     }
 
     await Promise.all(promises);
     this.metrics.totalConnections = this.pool.size;
-    console.log(`[ConnectionPool] Pre-warmed ${this.pool.size} connections`);
+    logger.info(`[ConnectionPool] Pre-warmed ${this.pool.size} connections`);
   }
 
   /**
@@ -248,7 +250,7 @@ export class ConnectionPool {
     try {
       await pooled.connection.disconnect();
     } catch (err) {
-      console.warn(`[ConnectionPool] Error disconnecting connection ${id}:`, err);
+      logger.warn(`[ConnectionPool] Error disconnecting connection ${id}:`, err);
     }
 
     this.pool.delete(id);
@@ -270,11 +272,11 @@ export class ConnectionPool {
         pooled.isHealthy = isHealthy;
 
         if (!isHealthy) {
-          console.warn(`[ConnectionPool] Unhealthy connection ${id}, removing`);
+          logger.warn(`[ConnectionPool] Unhealthy connection ${id}, removing`);
           await this.removeConnection(id);
         }
       } catch (err) {
-        console.warn(`[ConnectionPool] Health check failed for ${id}:`, err);
+        logger.warn(`[ConnectionPool] Health check failed for ${id}:`, err);
         pooled.isHealthy = false;
       }
     }

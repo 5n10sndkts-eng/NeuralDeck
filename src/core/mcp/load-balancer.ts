@@ -5,6 +5,8 @@
  * multiple routing strategies and health-aware selection.
  */
 
+import { logger } from '@/services/logger';
+
 type RoutingStrategy = 'round-robin' | 'least-connections' | 'response-time' | 'weighted';
 
 interface ServerInstance {
@@ -98,7 +100,7 @@ export class MCPLoadBalancer {
     );
 
     if (healthyServers.length === 0) {
-      console.warn('[MCPLoadBalancer] No healthy servers available');
+      logger.warn('[MCPLoadBalancer] No healthy servers available');
       return null;
     }
 
@@ -297,16 +299,16 @@ export class MCPLoadBalancer {
         if (!isHealthy && server.isHealthy) {
           // Server became unhealthy
           server.isHealthy = false;
-          console.warn(`[MCPLoadBalancer] Server ${id} marked as unhealthy`);
+          logger.warn(`[MCPLoadBalancer] Server ${id} marked as unhealthy`);
         } else if (isHealthy && !server.isHealthy) {
           // Server recovered
           server.isHealthy = true;
-          console.log(`[MCPLoadBalancer] Server ${id} recovered`);
+          logger.info(`[MCPLoadBalancer] Server ${id} recovered`);
         }
 
         server.lastHealthCheck = Date.now();
       } catch (err) {
-        console.warn(`[MCPLoadBalancer] Health check failed for ${id}:`, err);
+        logger.warn(`[MCPLoadBalancer] Health check failed for ${id}:`, err);
         server.isHealthy = false;
       }
     }

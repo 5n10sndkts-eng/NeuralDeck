@@ -5,6 +5,8 @@
  * Implements request queuing, exponential backoff, and rate limit tracking.
  */
 
+import { logger } from '@/services/logger';
+
 // --- INTERFACES ---
 
 export interface RateLimitConfig {
@@ -151,7 +153,7 @@ export class RateLimiter {
 
         this.state.retryAfter = Date.now() + retryAfterMs;
 
-        console.log(`[RateLimiter] Rate limited. Retry after: ${retryAfterMs}ms`);
+        logger.info(`[RateLimiter] Rate limited. Retry after: ${retryAfterMs}ms`);
     }
 
     /**
@@ -221,7 +223,7 @@ export class RateLimiter {
                     request.retryCount++;
                     this.metrics.retriedRequests++;
 
-                    console.log(`[RateLimiter] Retrying request ${request.id} after ${backoff}ms (attempt ${request.retryCount})`);
+                    logger.info(`[RateLimiter] Retrying request ${request.id} after ${backoff}ms (attempt ${request.retryCount})`);
 
                     setTimeout(() => {
                         this.queue.push(request);
@@ -258,7 +260,7 @@ export class RateLimiter {
             };
 
             this.queue.push(request);
-            console.log(`[RateLimiter] Queued request ${request.id}. Queue size: ${this.queue.length}`);
+            logger.info(`[RateLimiter] Queued request ${request.id}. Queue size: ${this.queue.length}`);
 
             this.processQueue();
         });

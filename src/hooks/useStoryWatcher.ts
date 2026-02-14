@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from './useSocket';
 import { authFetch } from '../services/auth';
+import { logger } from '@/services/logger';
 
 const env = (globalThis as any)?.import?.meta?.env || (typeof process !== 'undefined' ? process.env : {}) || {};
 const API_BASE = env.VITE_API_BASE || 'http://localhost:3001/api';
@@ -112,7 +113,7 @@ export const useStoryWatcher = () => {
                 error: null,
             }));
         } catch (err) {
-            console.error('[useStoryWatcher] Error fetching stories:', err);
+            logger.error('[useStoryWatcher] Error fetching stories:', err);
             setState(prev => ({
                 ...prev,
                 error: err instanceof Error ? err.message : 'Unknown error',
@@ -125,7 +126,7 @@ export const useStoryWatcher = () => {
         if (!socket || !isConnected) return;
 
         const handleStoryCreated = (data: { path: string; content?: string }) => {
-            console.log('[useStoryWatcher] Story created:', data.path);
+            logger.info('[useStoryWatcher] Story created:', data.path);
 
             const metadata = data.content
                 ? parseStoryMetadata(data.content, data.path)
@@ -149,7 +150,7 @@ export const useStoryWatcher = () => {
         };
 
         const handleStoryDeleted = (data: { path: string }) => {
-            console.log('[useStoryWatcher] Story deleted:', data.path);
+            logger.info('[useStoryWatcher] Story deleted:', data.path);
 
             setState(prev => ({
                 ...prev,
@@ -159,7 +160,7 @@ export const useStoryWatcher = () => {
         };
 
         const handleStoryUpdated = (data: { path: string; content?: string }) => {
-            console.log('[useStoryWatcher] Story updated:', data.path);
+            logger.info('[useStoryWatcher] Story updated:', data.path);
 
             const metadata = data.content
                 ? parseStoryMetadata(data.content, data.path)

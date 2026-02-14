@@ -15,6 +15,7 @@ import {
 } from '../types';
 import { AGENT_DEFINITIONS } from './agent';
 import { sendChat, readFile } from './api';
+import { logger } from '@/services/logger';
 
 // --- Configuration ---
 
@@ -180,7 +181,7 @@ export class RedTeamEngine {
 
         const startTime = Date.now();
 
-        console.log(`[RedTeam] Deploying squad: ${this.config.agents.join(', ')}`);
+        logger.info(`[RedTeam] Deploying squad: ${this.config.agents.join(', ')}`);
         this.callbacks.onScanStart?.(this.currentScanId, this.config.agents);
 
         try {
@@ -194,11 +195,11 @@ export class RedTeamEngine {
             const report = this.generateReport(startTime);
             this.callbacks.onScanComplete?.(report);
 
-            console.log(`[RedTeam] Scan complete. Found ${this.findings.length} vulnerabilities.`);
+            logger.info(`[RedTeam] Scan complete. Found ${this.findings.length} vulnerabilities.`);
             return report;
 
         } catch (error: any) {
-            console.error(`[RedTeam] Scan failed:`, error);
+            logger.error(`[RedTeam] Scan failed:`, error);
             this.callbacks.onError?.(error.message);
             throw error;
         } finally {
@@ -217,7 +218,7 @@ export class RedTeamEngine {
         const agentDef = AGENT_DEFINITIONS[agent];
         const agentFindings: VulnerabilityFinding[] = [];
 
-        console.log(`[RedTeam] [${agentDef.name}] Starting analysis...`);
+        logger.info(`[RedTeam] [${agentDef.name}] Starting analysis...`);
 
         for (const filePath of files.slice(0, this.config.maxFilesPerAgent)) {
             try {
@@ -236,7 +237,7 @@ export class RedTeamEngine {
                 }
 
             } catch (error: any) {
-                console.warn(`[RedTeam] [${agentDef.name}] Error scanning ${filePath}:`, error.message);
+                logger.warn(`[RedTeam] [${agentDef.name}] Error scanning ${filePath}:`, error.message);
             }
         }
 
@@ -278,7 +279,7 @@ export class RedTeamEngine {
             return this.parseFindings(text, agent, filePath);
 
         } catch (error: any) {
-            console.warn(`[RedTeam] LLM error for ${filePath}:`, error.message);
+            logger.warn(`[RedTeam] LLM error for ${filePath}:`, error.message);
             return [];
         }
     }

@@ -10,6 +10,7 @@ import { FastToolRegistry, ToolMetadata, ToolHandler } from './fast-tool-registr
 import { MCPLoadBalancer, RoutingStrategy, ServerInstance } from './load-balancer';
 import { MCPMetricsCollector, HealthStatus } from './metrics';
 import { OptimizedTransport, MCPMessage } from './optimized-transport';
+import { logger } from '@/services/logger';
 
 interface OptimizedMCPConfig {
   // Connection pooling
@@ -136,12 +137,12 @@ export class OptimizedMCPServer {
    */
   async start(transport?: OptimizedTransport): Promise<void> {
     if (this.isRunning) {
-      console.warn('[OptimizedMCPServer] Server already running');
+      logger.warn('[OptimizedMCPServer] Server already running');
       return;
     }
 
     const startupStart = performance.now();
-    console.log(`[OptimizedMCPServer] Starting ${this.config.serverName} v${this.config.serverVersion}`);
+    logger.info(`[OptimizedMCPServer] Starting ${this.config.serverName} v${this.config.serverVersion}`);
 
     try {
       // Build tool index
@@ -166,11 +167,11 @@ export class OptimizedMCPServer {
       const startupTime = performance.now() - startupStart;
       this.metrics.recordStartup(startupTime);
 
-      console.log(`[OptimizedMCPServer] Started successfully in ${startupTime.toFixed(2)}ms`);
-      console.log(`[OptimizedMCPServer] Registered ${this.tools.size} tools`);
+      logger.info(`[OptimizedMCPServer] Started successfully in ${startupTime.toFixed(2)}ms`);
+      logger.info(`[OptimizedMCPServer] Registered ${this.tools.size} tools`);
       
     } catch (err) {
-      console.error('[OptimizedMCPServer] Failed to start:', err);
+      logger.error('[OptimizedMCPServer] Failed to start:', err);
       throw err;
     }
   }
@@ -181,7 +182,7 @@ export class OptimizedMCPServer {
   async stop(): Promise<void> {
     if (!this.isRunning) return;
 
-    console.log('[OptimizedMCPServer] Stopping...');
+    logger.info('[OptimizedMCPServer] Stopping...');
 
     // Flush transport
     if (this.transport) {
@@ -193,7 +194,7 @@ export class OptimizedMCPServer {
     this.loadBalancer.shutdown();
 
     this.isRunning = false;
-    console.log('[OptimizedMCPServer] Stopped');
+    logger.info('[OptimizedMCPServer] Stopped');
   }
 
   /**
@@ -316,10 +317,10 @@ export class OptimizedMCPServer {
       endpoint,
       isHealthy: true,
       async connect() {
-        console.log(`[MCPConnection] Connected to ${endpoint}`);
+        logger.info(`[MCPConnection] Connected to ${endpoint}`);
       },
       async disconnect() {
-        console.log(`[MCPConnection] Disconnected from ${endpoint}`);
+        logger.info(`[MCPConnection] Disconnected from ${endpoint}`);
       },
     };
 
@@ -349,10 +350,10 @@ export class OptimizedMCPServer {
   }
 
   private onHealthStatusChange(health: HealthStatus): void {
-    console.warn(`[OptimizedMCPServer] Health status changed: ${health.status}`);
+    logger.warn(`[OptimizedMCPServer] Health status changed: ${health.status}`);
     
     if (health.status === 'critical') {
-      console.error('[OptimizedMCPServer] CRITICAL: Error rate or pool hit rate unacceptable');
+      logger.error('[OptimizedMCPServer] CRITICAL: Error rate or pool hit rate unacceptable');
     }
   }
 }

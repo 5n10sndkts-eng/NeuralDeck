@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { LogEntry, NeuralPhase } from './useNeuralAutonomy'; // Reuse types for now
 import { AgentProfile, AgentNodeState, VulnerabilityFinding, SecurityReport, VulnerabilitySeverity } from '../types';
 import { authFetch, authService } from '../services/auth';
+import { logger } from '@/services/logger';
 
 // --- CONNECTION STATE TYPES (Story 6-6) ---
 
@@ -327,7 +328,7 @@ export const useSocket = () => {
         setConnectionInfo(prev => ({ ...prev, state: 'connecting' }));
 
         s.on('connect', () => {
-            console.log('[Socket] Connected successfully');
+            logger.info('[Socket] Connected successfully');
             setIsConnected(true);
             const now = Date.now();
             setConnectionInfo({
@@ -346,7 +347,7 @@ export const useSocket = () => {
 
             // Story 6-6: Request resync with last known version
             if (lastStateVersionRef.current > 0) {
-                console.log('[Socket] Requesting resync from version:', lastStateVersionRef.current);
+                logger.info('[Socket] Requesting resync from version:', lastStateVersionRef.current);
                 s.emit('resync', { lastVersion: lastStateVersionRef.current });
             } else {
                 // Request initial full state
@@ -355,7 +356,7 @@ export const useSocket = () => {
         });
 
         s.on('disconnect', (reason) => {
-            console.log('[Socket] Disconnected:', reason);
+            logger.info('[Socket] Disconnected:', reason);
             setIsConnected(false);
             const now = Date.now();
             setConnectionInfo(prev => ({
@@ -367,7 +368,7 @@ export const useSocket = () => {
 
         // Story 6-6: Track reconnection attempts
         s.io.on('reconnect_attempt', (attempt) => {
-            console.log('[Socket] Reconnection attempt:', attempt);
+            logger.info('[Socket] Reconnection attempt:', attempt);
             setConnectionInfo(prev => ({
                 ...prev,
                 state: 'reconnecting',
@@ -402,11 +403,11 @@ export const useSocket = () => {
         });
 
         s.io.on('reconnect', (attempt) => {
-            console.log('[Socket] Reconnected after', attempt, 'attempts');
+            logger.info('[Socket] Reconnected after', attempt, 'attempts');
         });
 
         s.io.on('reconnect_failed', () => {
-            console.error('[Socket] Reconnection failed permanently');
+            logger.error('[Socket] Reconnection failed permanently');
             setConnectionInfo(prev => ({
                 ...prev,
                 state: 'disconnected',
@@ -415,12 +416,12 @@ export const useSocket = () => {
         });
 
         s.on('connect_error', (error) => {
-            console.error('[Socket] Connection error:', error.message);
+            logger.error('[Socket] Connection error:', error.message);
             // If auth error, refresh the token and reconnect
             if (error.message.includes('Authentication') || error.message.includes('Session')) {
                 const currentToken = authService.getToken();
                 if (!currentToken) {
-                    console.log('[Socket] No token, creating anonymous session...');
+                    logger.info('[Socket] No token, creating anonymous session...');
                     authService.createSession('anonymous').then(() => {
                         // Reconnect with new token
                         s.auth = { token: authService.getToken() || undefined };
@@ -440,7 +441,7 @@ export const useSocket = () => {
 
         // Story 6-6: Handle state snapshot (full state on connect/resync)
         s.on('state:snapshot', (data: { version: number; timestamp: number; state: any }) => {
-            console.log('[Socket] Received state snapshot, version:', data.version);
+            logger.info('[Socket] Received state snapshot, version:', data.version);
             lastStateVersionRef.current = data.version;
 
             // Apply full state from snapshot
@@ -457,11 +458,11 @@ export const useSocket = () => {
 
         // Story 6-6: Handle delta updates
         s.on('state:delta', (delta: Delta<any> & { domain?: string }) => {
-            console.log('[Socket] Received delta update, version:', delta.version, 'domain:', delta.domain);
+            logger.info('[Socket] Received delta update, version:', delta.version, 'domain:', delta.domain);
 
             // Validate version sequence
             if (delta.version !== lastStateVersionRef.current + 1) {
-                console.warn('[Socket] Version gap detected (expected:', lastStateVersionRef.current + 1, 'got:', delta.version, '), requesting resync');
+                logger.warn('[Socket] Version gap detected (expected:', lastStateVersionRef.current + 1, 'got:', delta.version, '), requesting resync');
                 s.emit('resync', { lastVersion: lastStateVersionRef.current });
                 return;
             }
@@ -479,7 +480,7 @@ export const useSocket = () => {
 
         // Story 6-6: Handle sync complete acknowledgment
         s.on('state:sync-complete', (data: { version: number }) => {
-            console.log('[Socket] Sync complete, at version:', data.version);
+            logger.info('[Socket] Sync complete, at version:', data.version);
             lastStateVersionRef.current = data.version;
         });
 
@@ -513,7 +514,7 @@ export const useSocket = () => {
         // --- SWARM EVENT LISTENERS (Story 4-2) ---
 
         s.on('swarm:started', (event: SwarmStartedEvent) => {
-            console.log('[useSocket] Swarm started:', event.executionId);
+            logger.info('[useSocket] Swarm started:', event.executionId);
             setSwarmState({
                 executionId: event.executionId,
                 status: 'running',
@@ -527,7 +528,7 @@ export const useSocket = () => {
         });
 
         s.on('swarm:node-started', (event: SwarmNodeStartedEvent) => {
-            console.log('[useSocket] Swarm node started:', event.nodeId);
+            logger.info('[useSocket] Swarm node started:', event.nodeId);
             setSwarmState(prev => {
                 const newNodeStates = new Map(prev.nodeStates);
                 newNodeStates.set(event.nodeId, {
@@ -552,7 +553,7 @@ export const useSocket = () => {
         });
 
         s.on('swarm:node-completed', (event: SwarmNodeCompletedEvent) => {
-            console.log('[useSocket] Swarm node completed:', event.nodeId, event.status);
+            logger.info('[useSocket] Swarm node completed:', event.nodeId, event.status);
             setSwarmState(prev => {
                 const newNodeStates = new Map(prev.nodeStates);
                 newNodeStates.set(event.nodeId, {
@@ -572,7 +573,7 @@ export const useSocket = () => {
         });
 
         s.on('swarm:completed', (event: SwarmCompletedEvent) => {
-            console.log('[useSocket] Swarm completed:', event.executionId, event.status);
+            logger.info('[useSocket] Swarm completed:', event.executionId, event.status);
             setSwarmState(prev => ({
                 ...prev,
                 status: event.status,
@@ -583,7 +584,7 @@ export const useSocket = () => {
         });
 
         s.on('swarm:cancelled', (event: SwarmCancelledEvent) => {
-            console.log('[useSocket] Swarm cancelled:', event.executionId);
+            logger.info('[useSocket] Swarm cancelled:', event.executionId);
             setSwarmState(prev => ({
                 ...prev,
                 status: 'cancelled',
@@ -594,7 +595,7 @@ export const useSocket = () => {
         // --- CONFLICT EVENT LISTENERS (Story 4-3) ---
 
         s.on('conflict:detected', (event: ConflictDetectedEvent) => {
-            console.log('[useSocket] Conflict detected:', event.conflictId);
+            logger.info('[useSocket] Conflict detected:', event.conflictId);
             setConflictState(prev => {
                 const newConflicts = new Map(prev.conflicts);
                 const conflict: ConflictState = {
@@ -616,7 +617,7 @@ export const useSocket = () => {
         });
 
         s.on('conflict:resolved', (event: ConflictResolvedEvent) => {
-            console.log('[useSocket] Conflict resolved:', event.conflictId);
+            logger.info('[useSocket] Conflict resolved:', event.conflictId);
             setConflictState(prev => {
                 const newConflicts = new Map<string, ConflictState>(prev.conflicts);
                 const existing = newConflicts.get(event.conflictId);
@@ -633,7 +634,7 @@ export const useSocket = () => {
         });
 
         s.on('conflict:failed', (event: ConflictFailedEvent) => {
-            console.log('[useSocket] Conflict failed:', event.conflictId, event.error);
+            logger.info('[useSocket] Conflict failed:', event.conflictId, event.error);
             setConflictState(prev => {
                 const newConflicts = new Map<string, ConflictState>(prev.conflicts);
                 const existing = newConflicts.get(event.conflictId);
@@ -651,7 +652,7 @@ export const useSocket = () => {
         // --- SECURITY EVENT LISTENERS (Story 5-3) ---
 
         s.on('security:scan-started', (event: SecurityScanStartedEvent) => {
-            console.log('[useSocket] Security scan started:', event.scanId);
+            logger.info('[useSocket] Security scan started:', event.scanId);
             setSecurityState({
                 scanId: event.scanId,
                 status: 'scanning',
@@ -663,7 +664,7 @@ export const useSocket = () => {
         });
 
         s.on('security:finding-discovered', (event: SecurityFindingDiscoveredEvent) => {
-            console.log('[useSocket] Security finding discovered:', event.finding.id);
+            logger.info('[useSocket] Security finding discovered:', event.finding.id);
             setSecurityState(prev => {
                 const newFindings = [...prev.findings, event.finding];
                 const newSummary = { ...prev.summary };
@@ -691,7 +692,7 @@ export const useSocket = () => {
         });
 
         s.on('security:finding-updated', (event: SecurityFindingUpdatedEvent) => {
-            console.log('[useSocket] Security finding updated:', event.findingId, event.status);
+            logger.info('[useSocket] Security finding updated:', event.findingId, event.status);
             setSecurityState(prev => ({
                 ...prev,
                 findings: prev.findings.map(f =>
@@ -701,7 +702,7 @@ export const useSocket = () => {
         });
 
         s.on('security:scan-completed', (event: SecurityScanCompletedEvent) => {
-            console.log('[useSocket] Security scan completed:', event.scanId);
+            logger.info('[useSocket] Security scan completed:', event.scanId);
             setSecurityState(prev => ({
                 ...prev,
                 status: 'completed',
@@ -711,7 +712,7 @@ export const useSocket = () => {
         });
 
         s.on('security:scan-cancelled', (event: SecurityScanCancelledEvent) => {
-            console.log('[useSocket] Security scan cancelled:', event.scanId);
+            logger.info('[useSocket] Security scan cancelled:', event.scanId);
             setSecurityState(prev => ({
                 ...prev,
                 status: 'cancelled',
@@ -722,12 +723,12 @@ export const useSocket = () => {
         // --- CONVERSATION EVENT LISTENERS (Story 6-2) ---
         
         s.on('chat:message', (message: any) => {
-            console.log('[useSocket] Chat message received:', message);
+            logger.info('[useSocket] Chat message received:', message);
             // Messages are handled by ConversationContext, this is for multi-tab sync
         });
 
         s.on('chat:session', (data: { sessionId: string; action: string }) => {
-            console.log('[useSocket] Chat session event:', data);
+            logger.info('[useSocket] Chat session event:', data);
             // Session changes from other tabs (for future multi-tab coordination)
         });
 
@@ -740,7 +741,7 @@ export const useSocket = () => {
                 if ((prev.state === 'disconnected' || prev.state === 'reconnecting') && prev.disconnectedAt) {
                     const duration = Date.now() - prev.disconnectedAt;
                     if (duration >= STALE_THRESHOLD_MS) {
-                        console.warn('[Socket] Connection is stale (disconnected > 5 minutes)');
+                        logger.warn('[Socket] Connection is stale (disconnected > 5 minutes)');
                         return { ...prev, state: 'stale' };
                     }
                 }
@@ -785,7 +786,7 @@ export const useSocket = () => {
             });
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to start swarm execution:', error);
+            logger.error('[useSocket] Failed to start swarm execution:', error);
             return null;
         }
     }, []);
@@ -797,7 +798,7 @@ export const useSocket = () => {
             });
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to cancel swarm execution:', error);
+            logger.error('[useSocket] Failed to cancel swarm execution:', error);
             return null;
         }
     }, []);
@@ -816,7 +817,7 @@ export const useSocket = () => {
             });
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to auto-resolve conflict:', error);
+            logger.error('[useSocket] Failed to auto-resolve conflict:', error);
             return null;
         }
     }, []);
@@ -830,7 +831,7 @@ export const useSocket = () => {
             });
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to manually resolve conflict:', error);
+            logger.error('[useSocket] Failed to manually resolve conflict:', error);
             return null;
         }
     }, []);
@@ -840,7 +841,7 @@ export const useSocket = () => {
             const response = await authFetch('/api/conflicts');
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to get conflicts:', error);
+            logger.error('[useSocket] Failed to get conflicts:', error);
             return { conflicts: [], total: 0 };
         }
     }, []);
@@ -859,7 +860,7 @@ export const useSocket = () => {
             });
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to start security scan:', error);
+            logger.error('[useSocket] Failed to start security scan:', error);
             return null;
         }
     }, []);
@@ -871,7 +872,7 @@ export const useSocket = () => {
             });
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to cancel security scan:', error);
+            logger.error('[useSocket] Failed to cancel security scan:', error);
             return null;
         }
     }, []);
@@ -881,7 +882,7 @@ export const useSocket = () => {
             const response = await authFetch(`/api/security/findings/${scanId}`);
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to get security findings:', error);
+            logger.error('[useSocket] Failed to get security findings:', error);
             return { findings: [] };
         }
     }, []);
@@ -891,7 +892,7 @@ export const useSocket = () => {
             const response = await authFetch(`/api/security/report/${scanId}`);
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to get security report:', error);
+            logger.error('[useSocket] Failed to get security report:', error);
             return null;
         }
     }, []);
@@ -909,7 +910,7 @@ export const useSocket = () => {
             });
             return await response.json();
         } catch (error) {
-            console.error('[useSocket] Failed to update finding status:', error);
+            logger.error('[useSocket] Failed to update finding status:', error);
             return null;
         }
     }, []);
@@ -921,7 +922,7 @@ export const useSocket = () => {
     // Story 6-6: Connection control functions
     const forceReconnect = useCallback(() => {
         if (socket) {
-            console.log('[Socket] Force reconnecting...');
+            logger.info('[Socket] Force reconnecting...');
             socket.disconnect();
             socket.connect();
             setConnectionInfo(prev => ({
@@ -933,7 +934,7 @@ export const useSocket = () => {
     }, [socket]);
 
     const forceReload = useCallback(() => {
-        console.log('[Socket] Force reloading page...');
+        logger.info('[Socket] Force reloading page...');
         window.location.reload();
     }, []);
 

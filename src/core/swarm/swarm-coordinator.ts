@@ -30,6 +30,7 @@ import {
 } from './topology';
 
 import { EfficiencyMonitor, type EfficiencyReport } from './efficiency-monitor';
+import { logger } from '@/services/logger';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -269,14 +270,14 @@ export class SwarmCoordinator {
         this.registry.getAllAgents(),
       );
 
-      console.log(
+      logger.info(
         `[SwarmCoordinator] Topology: ${this.topologyStrategy.type} | ` +
           `${plan.length} batches planned`,
       );
 
       for (const batch of plan) {
         this.currentPhase = batch.step;
-        console.log(
+        logger.info(
           `[SwarmCoordinator] Batch ${batch.step}: ${batch.label}`,
         );
 
@@ -345,7 +346,7 @@ export class SwarmCoordinator {
           (d) => !this.completedAgentIds.has(d),
         );
         if (unmet.length > 0) {
-          console.warn(
+          logger.warn(
             `[SwarmCoordinator] Agent #${agent.id} blocked: deps ${unmet.join(', ')} not met`,
           );
           this.registry.updateAgentStatus(agent.id, 'blocked');
@@ -402,7 +403,7 @@ export class SwarmCoordinator {
 
         this.registry.updateTaskStatus(task.id, 'completed', taskResult);
         this.registry.updateAgentStatus(agent.id, 'completed');
-        console.log(
+        logger.info(
           `[SwarmCoordinator] Agent #${agent.id} (${agent.name}) completed`,
         );
         this.onAgentComplete?.(agent, task);
@@ -410,13 +411,13 @@ export class SwarmCoordinator {
         const msg = error instanceof Error ? error.message : 'Unknown error';
         this.registry.updateTaskStatus(task.id, 'failed', undefined, msg);
         this.registry.updateAgentStatus(agent.id, 'failed');
-        console.error(
+        logger.error(
           `[SwarmCoordinator] Agent #${agent.id} (${agent.name}) failed: ${msg}`,
         );
 
         // Retry
         if (this.shouldRetryAgent(agent)) {
-          console.log(`[SwarmCoordinator] Retrying agent #${agent.id}`);
+          logger.info(`[SwarmCoordinator] Retrying agent #${agent.id}`);
           this.registry.updateAgentStatus(agent.id, 'idle');
           await this.delay(this.config.retryDelayMs);
           return run();

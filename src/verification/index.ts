@@ -5,6 +5,8 @@
  * for ensuring code quality and correctness throughout the development lifecycle.
  */
 
+import { logger } from '@/services/logger';
+
 // ============================================================================
 // TRUTH SCORING SYSTEM
 // ============================================================================
@@ -421,15 +423,15 @@ export class RollbackSystem {
   async rollback(snapshotId: string): Promise<boolean> {
     const snapshot = this.snapshots.get(snapshotId);
     if (!snapshot) {
-      console.error(`Snapshot ${snapshotId} not found`);
+      logger.error(`Snapshot ${snapshotId} not found`);
       return false;
     }
 
     // In a real implementation, this would restore file contents
-    console.log(`Rolling back to snapshot ${snapshotId}...`);
+    logger.info(`Rolling back to snapshot ${snapshotId}...`);
     
     for (const file of snapshot.files) {
-      console.log(`Restoring ${file.path}`);
+      logger.info(`Restoring ${file.path}`);
       // Would write file.content back to disk
     }
 
@@ -445,7 +447,7 @@ export class RollbackSystem {
       .sort((a, b) => b.timestamp - a.timestamp);
 
     if (goodSnapshots.length === 0) {
-      console.error('No good snapshots available for rollback');
+      logger.error('No good snapshots available for rollback');
       return false;
     }
 
@@ -650,7 +652,7 @@ let qaManager: QualityAssuranceManager | null = null;
 export function initializeQA(config?: Partial<QAManagerConfig>): QualityAssuranceManager {
   if (!qaManager) {
     qaManager = new QualityAssuranceManager(config);
-    console.log('✅ Quality Assurance system initialized');
+    logger.info('✅ Quality Assurance system initialized');
   }
   return qaManager;
 }

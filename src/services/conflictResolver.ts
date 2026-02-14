@@ -9,6 +9,7 @@
 import { ChatMessage, LlmConfig, AgentNodeState } from '../types';
 import { sendChat, readFile, writeFile } from './api';
 import { AGENT_DEFINITIONS } from './agent';
+import { logger } from '@/services/logger';
 
 // --- INTERFACES ---
 
@@ -140,7 +141,7 @@ export class ConflictResolver {
         try {
             originalContent = await readFile(filePath);
         } catch (e) {
-            console.warn(`[ConflictResolver] Could not read original file: ${filePath}`);
+            logger.warn(`[ConflictResolver] Could not read original file: ${filePath}`);
         }
 
         const conflict: ConflictEvent = {
@@ -160,7 +161,7 @@ export class ConflictResolver {
         this.conflicts.set(conflictId, conflict);
         this.updateStats('pending', filePath, developerA.nodeId, developerB.nodeId);
 
-        console.log(`[ConflictResolver] Conflict detected: ${conflictId} on file ${filePath}`);
+        logger.info(`[ConflictResolver] Conflict detected: ${conflictId} on file ${filePath}`);
         this.onConflictDetected?.(conflict);
 
         return conflict;
@@ -473,7 +474,7 @@ ${contentB}
     private log(conflict: ConflictEvent, message: string): void {
         const logEntry = `[${new Date().toISOString()}] ${message}`;
         conflict.logs.push(logEntry);
-        console.log(`[ConflictResolver] [${conflict.id}] ${message}`);
+        logger.info(`[ConflictResolver] [${conflict.id}] ${message}`);
     }
 
     private updateStats(type: 'pending' | 'resolved' | 'failed', filePath: string, ...nodeIds: string[]): void {

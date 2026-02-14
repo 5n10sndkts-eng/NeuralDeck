@@ -5,6 +5,8 @@
  * error rate calculation, and health status determination.
  */
 
+import { logger } from '@/services/logger';
+
 interface MCPMetrics {
   requestCount: number;
   errorCount: number;
@@ -93,7 +95,7 @@ export class MCPMetricsCollector {
    */
   recordStartup(latencyMs: number): void {
     this.metrics.startupTime = latencyMs;
-    console.log(`[MCPMetrics] Server started in ${latencyMs.toFixed(2)}ms`);
+    logger.info(`[MCPMetrics] Server started in ${latencyMs.toFixed(2)}ms`);
   }
 
   /**

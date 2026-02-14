@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import { SoundEffects } from '../services/sound';
+import { logger } from '@/services/logger';
 
 export type UIStateMode = 'IDLE' | 'CODING' | 'ALERT' | 'POLLING';
 export type SoundType = 'hover' | 'click' | 'boot' | 'alert' | 'typing' | 'success' | 'error';
@@ -56,7 +57,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     const setThemeMode = useCallback((theme: ThemeMode) => {
         setThemeModeState(theme);
         localStorage.setItem(THEME_STORAGE_KEY, theme);
-        console.log('[Theme] Mode changed to:', theme);
+        logger.info('[Theme] Mode changed to:', theme);
     }, []);
 
     const toggleWarRoomMode = useCallback(() => {

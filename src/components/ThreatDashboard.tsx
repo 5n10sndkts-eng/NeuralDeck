@@ -22,6 +22,7 @@ import {
 import { CyberPanel, CyberButton } from './CyberUI';
 import { useUI } from '../contexts/UIContext';
 import { authFetch } from '../services/auth';
+import { logger } from '@/services/logger';
 
 // --- Types ---
 
@@ -320,7 +321,7 @@ export const ThreatDashboard: React.FC<ThreatDashboardProps> = ({
                 setFindings(data.findings);
             }
         } catch (error) {
-            console.error('[ThreatDash] Failed to fetch findings:', error);
+            logger.error('[ThreatDash] Failed to fetch findings:', error);
         } finally {
             setIsLoading(false);
         }
@@ -342,9 +343,9 @@ export const ThreatDashboard: React.FC<ThreatDashboardProps> = ({
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: newStatus }),
                     });
-                    console.log('[ThreatDash] Status updated:', findingId, newStatus);
+                    logger.info('[ThreatDash] Status updated:', findingId, newStatus);
                 } catch (error) {
-                    console.error('[ThreatDash] Failed to update status:', error);
+                    logger.error('[ThreatDash] Failed to update status:', error);
                     // Revert on failure
                     if (scanId) fetchFindings(scanId);
                 }
