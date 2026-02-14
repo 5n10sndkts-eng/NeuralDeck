@@ -1,0 +1,134 @@
+{
+  "name": "neuraldeck-v3-integration",
+  "version": "3.0.0",
+  "description": "NeuralDeck V3 Deep Integration with agentic-flow@alpha",
+  "type": "module",
+  "scripts": {
+    "v3:integration:init": "node scripts/v3-integration-init.js",
+    "v3:integration:adapter": "node scripts/v3-adapter-layer.js",
+    "v3:integration:migrate": "node scripts/v3-migrate-systems.js",
+    "v3:integration:cleanup": "node scripts/v3-cleanup-deprecated.js",
+    "v3:integration:verify": "node scripts/v3-verify-integration.js",
+    "v3:integration:full": "npm run v3:integration:init && npm run v3:integration:adapter && npm run v3:integration:migrate && npm run v3:integration:verify",
+    "v3:sona:set-mode": "node scripts/v3-sona-set-mode.js",
+    "v3:flash-attention:enable": "node scripts/v3-flash-attention-enable.js",
+    "v3:agentdb:setup": "node scripts/v3-agentdb-setup.js",
+    "v3:benchmark": "node scripts/v3-benchmark.js"
+  },
+  "dependencies": {
+    "agentic-flow": "^3.0.0-alpha",
+    "@agentic-flow/core": "^3.0.0-alpha",
+    "@agentic-flow/swarm": "^3.0.0-alpha",
+    "@agentic-flow/memory": "^3.0.0-alpha",
+    "@agentic-flow/mcp": "^3.0.0-alpha",
+    "@agentic-flow/sona": "^3.0.0-alpha",
+    "@agentic-flow/attention": "^3.0.0-alpha"
+  },
+  "v3Integration": {
+    "targetCodeReduction": {
+      "from": 15000,
+      "to": 5000,
+      "reduction": "66%"
+    },
+    "systemsToMigrate": [
+      {
+        "name": "SwarmEngine",
+        "currentFile": "src/services/swarmEngine.ts",
+        "lines": 523,
+        "replacement": "@agentic-flow/swarm",
+        "status": "pending"
+      },
+      {
+        "name": "AgentCoordination",
+        "currentFiles": ["src/core/swarm/*.ts"],
+        "lines": 2477,
+        "replacement": "@agentic-flow/swarm/coordination",
+        "status": "pending"
+      },
+      {
+        "name": "MemorySystem",
+        "currentFiles": ["src/core/memory/*.ts"],
+        "lines": "TBD",
+        "replacement": "@agentic-flow/memory/AgentDB",
+        "status": "pending"
+      }
+    ],
+    "featuresToIntegrate": [
+      {
+        "name": "SONA Learning",
+        "package": "@agentic-flow/sona",
+        "modes": ["real-time", "balanced", "research", "edge", "batch"],
+        "adaptationTime": "<0.05ms",
+        "status": "pending"
+      },
+      {
+        "name": "Flash Attention",
+        "package": "@agentic-flow/attention",
+        "speedupTarget": "2.49x-7.47x",
+        "memoryReduction": "50-75%",
+        "status": "pending"
+      },
+      {
+        "name": "AgentDB",
+        "package": "@agentic-flow/memory",
+        "searchSpeedup": "150x-12,500x",
+        "indexType": "HNSW",
+        "dimensions": 1536,
+        "status": "pending"
+      },
+      {
+        "name": "MCP Tools",
+        "package": "@agentic-flow/mcp",
+        "builtinTools": 213,
+        "hookTypes": 19,
+        "status": "pending"
+      }
+    ],
+    "phases": [
+      {
+        "name": "Phase 1: Adapter Layer",
+        "duration": "1 week",
+        "tasks": [
+          "Install agentic-flow@alpha packages",
+          "Create adapter layer",
+          "Setup backward compatibility",
+          "Configure TypeScript types"
+        ],
+        "status": "in-progress"
+      },
+      {
+        "name": "Phase 2: System Migration",
+        "duration": "3 weeks",
+        "tasks": [
+          "Migrate SwarmEngine → agentic-flow swarm",
+          "Migrate AgentCoordination → agentic-flow coordination",
+          "Migrate MemorySystem → AgentDB",
+          "Update all imports and references"
+        ],
+        "status": "pending"
+      },
+      {
+        "name": "Phase 3: Feature Integration",
+        "duration": "2 weeks",
+        "tasks": [
+          "Integrate SONA learning modes",
+          "Enable Flash Attention",
+          "Setup AgentDB coordination",
+          "Configure MCP tools integration"
+        ],
+        "status": "pending"
+      },
+      {
+        "name": "Phase 4: Cleanup & Optimization",
+        "duration": "1 week",
+        "tasks": [
+          "Remove deprecated code",
+          "Verify code reduction target",
+          "Run performance benchmarks",
+          "Validate feature parity"
+        ],
+        "status": "pending"
+      }
+    ]
+  }
+}
