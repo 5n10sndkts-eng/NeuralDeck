@@ -53,12 +53,12 @@ const TheEditor: React.FC<Props> = ({
   };
 
   const triggerScan = () => {
-    if (isScanning) return;
+    if (isScanning || !activeFile) return;
     setIsScanning(true);
     SoundEffects.boot(); // Use boot sound as scan SFX
     setTimeout(() => {
       setIsScanning(false);
-      if (activeFile) onAudit(activeFile);
+      onAudit(activeFile);
     }, 2000); // Scan duration matches animation
   };
 
@@ -69,14 +69,21 @@ const TheEditor: React.FC<Props> = ({
   };
 
   // Basic syntax highlighting for display
+  // Security: escapes all HTML entities first, then only adds safe <span> wrappers.
+  // Final pass strips any tags that aren't our known-safe span patterns.
   const highlight = (code: string) => {
-    return code
+    const escaped = code
+      .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    const highlighted = escaped
       .replace(/\b(import|export|from|const|let|var|function|return|if|else)\b/g, '<span class="text-cyber-purple font-bold">$1</span>')
       .replace(/\b(true|false|null|undefined)\b/g, '<span class="text-orange-400">$1</span>')
-      .replace(/("[^"]*")/g, '<span class="text-green-400">$1</span>')
+      .replace(/(&quot;[^&]*&quot;)/g, '<span class="text-green-400">$1</span>')
       .replace(/(\/\/.*)/g, '<span class="text-gray-500 italic">$1</span>');
+    // Strip any HTML tags that aren't our safe span wrappers
+    return highlighted.replace(/<(?!\/?span\b)[^>]*>/gi, '');
   };
 
   if (!isOpen) return null;
@@ -85,7 +92,7 @@ const TheEditor: React.FC<Props> = ({
     <div className="flex flex-col h-full w-full relative overflow-hidden" style={{ backgroundColor: 'var(--color-void)' }}>
 
       {/* Editor Header - Premium HUD Style */}
-      <div className="h-14 flex items-end px-5 gap-1 z-20 relative" style={{
+      <div className="h-14 flex items-end px-2 sm:px-5 gap-1 z-20 relative overflow-x-auto" style={{
         background: 'linear-gradient(180deg, rgba(10, 10, 20, 0.98) 0%, rgba(5, 5, 15, 0.95) 100%)',
         backdropFilter: 'blur(20px)',
         borderBottom: '1px solid rgba(0, 240, 255, 0.2)'
@@ -134,12 +141,12 @@ const TheEditor: React.FC<Props> = ({
         <div className="flex-1" />
 
         {/* Toolbar */}
-        <div className="flex items-center gap-2 pb-1 pr-2">
-          <CyberButton onClick={triggerScan} variant="danger" className="text-[9px] py-1 h-6" icon={<ShieldAlert size={10} />}>
-            {isScanning ? 'SCANNING...' : 'SEC_AUDIT'}
+        <div className="flex items-center gap-1 sm:gap-2 pb-1 pr-2 flex-shrink-0">
+          <CyberButton onClick={triggerScan} variant="danger" className="text-[9px] py-1 h-6" icon={<ShieldAlert size={10} />} disabled={!activeFile}>
+            <span className="hidden sm:inline">{isScanning ? 'SCANNING...' : 'SEC_AUDIT'}</span>
           </CyberButton>
           <CyberButton onClick={() => setIsHistoryOpen(true)} variant="secondary" className="text-[9px] py-1 h-6" icon={<History size={10} />}>
-            HISTORY
+            <span className="hidden sm:inline">HISTORY</span>
           </CyberButton>
           <CyberButton onClick={() => activeFile && onSave(activeFile, localContent)} variant="primary" className="text-[9px] py-1 h-6" icon={<Save size={10} />}>
             SAVE

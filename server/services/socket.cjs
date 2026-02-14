@@ -14,7 +14,12 @@ const initSocket = (httpServer, options = {}) => {
     activeSessions = options.activeSessions;
     securityLogger = options.securityLogger;
     const corsOrigins = options.corsOrigins || [];
-    const allowUnauthenticated = process.env.ALLOW_UNAUTHENTICATED_SOCKET === 'true';
+    // Only allow unauthenticated sockets in development — never in production
+    const allowUnauthenticated = process.env.ALLOW_UNAUTHENTICATED_SOCKET === 'true'
+        && process.env.NODE_ENV !== 'production';
+    if (allowUnauthenticated) {
+        console.warn('[SOCKET] WARNING: Unauthenticated socket connections allowed (dev only). Set NODE_ENV=production to disable.');
+    }
 
     io = new Server(httpServer, {
         cors: {

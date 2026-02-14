@@ -76,6 +76,19 @@ const FileTreeItem: React.FC<{
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    } else if (e.key === 'ArrowRight' && node.type === 'directory' && !expanded) {
+      e.preventDefault();
+      setExpanded(true);
+    } else if (e.key === 'ArrowLeft' && node.type === 'directory' && expanded) {
+      e.preventDefault();
+      setExpanded(false);
+    }
+  };
+
   return (
     <div style={{ userSelect: 'none', position: 'relative' }}>
       <MotionDiv
@@ -84,6 +97,11 @@ const FileTreeItem: React.FC<{
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.2 }}
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        role={node.type === 'directory' ? 'treeitem' : 'treeitem'}
+        aria-expanded={node.type === 'directory' ? expanded : undefined}
+        aria-label={node.name}
         style={{
           paddingLeft: `${depth * 12 + 8}px`,
           display: 'flex',
@@ -203,7 +221,7 @@ const NeuralLink: React.FC<Props> = ({ files, onFileSelect, isOpen, activeFile, 
         </MotionDiv>
       )}
 
-      <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 0', position: 'relative' }}>
+      <div className="custom-scrollbar" role="tree" aria-label="File explorer" style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 0', position: 'relative' }}>
         {files.length === 0 && isLoading ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5, gap: '0.5rem' }}>
             <Loader2 size={24} className="animate-spin" style={{ color: 'var(--color-cyan)' }} />

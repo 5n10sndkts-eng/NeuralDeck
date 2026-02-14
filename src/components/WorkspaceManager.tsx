@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FolderOpen, FolderPlus, Trash2, Clock, GitBranch, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWorkspace } from '../contexts/WorkspaceContext';
@@ -15,6 +15,22 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ isOpen, onCl
   const { currentWorkspace, recentWorkspaces, openWorkspace, addWorkspace, removeWorkspace } = useWorkspace();
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showFolderBrowser) {
+          setShowFolderBrowser(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, showFolderBrowser, onClose]);
 
   const handleSelectFolder = async (path: string) => {
     try {
@@ -70,7 +86,7 @@ export const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({ isOpen, onCl
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[90] flex items-center justify-center p-4"
             style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
             onClick={onClose}
           >

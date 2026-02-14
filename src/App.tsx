@@ -120,24 +120,32 @@ const AppContent: React.FC = () => {
     const importFilesInputRef = useRef<HTMLInputElement | null>(null);
     const importFolderInputRef = useRef<HTMLInputElement | null>(null);
 
-    // Settings / Config - Initialize from LocalStorage
-    const [profiles, setProfiles] = useState<ConnectionProfile[]>(() => {
-        const saved = localStorage.getItem('neural_profiles');
-        return saved ? JSON.parse(saved) : [{
+    // Settings / Config - Initialize from LocalStorage (with safe parsing)
+    const safeJsonParse = <T,>(key: string, fallback: T): T => {
+        try {
+            const saved = localStorage.getItem(key);
+            return saved ? JSON.parse(saved) : fallback;
+        } catch {
+            console.warn(`[App] Corrupt localStorage data for "${key}", using default`);
+            return fallback;
+        }
+    };
+
+    const [profiles, setProfiles] = useState<ConnectionProfile[]>(() =>
+        safeJsonParse('neural_profiles', [{
             id: 'default',
             name: 'Local OpenAI',
             provider: 'openai',
             model: 'openai/gpt-oss-20b',
             baseUrl: 'http://localhost:8000'
-        }];
-    });
+        }])
+    );
 
     const [activeProfileId, setActiveProfileId] = useState(() => localStorage.getItem('neural_active_profile') || 'default');
 
-    const [agentRouting, setAgentRouting] = useState<Record<string, string>>(() => {
-        const saved = localStorage.getItem('neural_routing');
-        return saved ? JSON.parse(saved) : {};
-    });
+    const [agentRouting, setAgentRouting] = useState<Record<string, string>>(() =>
+        safeJsonParse('neural_routing', {})
+    );
 
     const [godMode, setGodMode] = useState(false);
     const [isSupervised, setIsSupervised] = useState(false);
@@ -1032,7 +1040,9 @@ const App: React.FC = () => {
         <UIProvider>
             <ConversationProvider>
                 <WorkspaceProvider>
-                    <AppContent />
+                    <ChunkErrorBoundary>
+                        <AppContent />
+                    </ChunkErrorBoundary>
                 </WorkspaceProvider>
             </ConversationProvider>
         </UIProvider>

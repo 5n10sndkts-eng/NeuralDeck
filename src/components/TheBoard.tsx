@@ -15,12 +15,19 @@ const TheBoard: React.FC<Props> = ({ files, onOpenFile, onUpdateFile }) => {
   const [stories, setStories] = useState<Story[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 1. Find Story Files
+  // 1. Find Story Files (with abort to prevent state updates after unmount)
   useEffect(() => {
+    let cancelled = false;
+
     const loadStories = async () => {
+        if (!files || files.length === 0) {
+            setStories([]);
+            return;
+        }
+
         setIsLoading(true);
         const foundStories: Story[] = [];
-        
+
         const traverse = (nodes: FileNode[]) => {
             nodes.forEach(node => {
                 if (node.type === 'file' && node.path.includes('stories/') && node.name.endsWith('.md')) {
@@ -43,22 +50,25 @@ const TheBoard: React.FC<Props> = ({ files, onOpenFile, onUpdateFile }) => {
             try {
                 const content = await readFile(story.path);
                 const statusMatch = content.match(/(?:Status|status):\s*(todo|in-progress|done)/i);
-                
+
                 return {
                     ...story,
                     content,
                     status: statusMatch ? (statusMatch[1].toLowerCase() as Story['status']) : 'todo'
                 };
-            } catch (e) {
+            } catch {
                 return story;
             }
         }));
 
-        setStories(hydratedStories);
-        setIsLoading(false);
+        if (!cancelled) {
+            setStories(hydratedStories);
+            setIsLoading(false);
+        }
     };
 
     loadStories();
+    return () => { cancelled = true; };
   }, [files]);
 
   const handleMoveStory = (story: Story, direction: 'next' | 'prev') => {
@@ -93,7 +103,7 @@ const TheBoard: React.FC<Props> = ({ files, onOpenFile, onUpdateFile }) => {
     const statusColor = status === 'todo' ? '#6b7280' : status === 'in-progress' ? '#ffd000' : '#4ade80';
 
     return (
-      <div className="flex-1 flex flex-col min-w-[320px] max-w-[450px]" style={{
+      <div className="flex-1 flex flex-col min-w-[250px] sm:min-w-[320px] max-w-[450px]" style={{
           backgroundColor: 'rgba(8, 8, 12, 0.8)',
           borderRight: '1px solid rgba(0, 240, 255, 0.1)'
       }}>

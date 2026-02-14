@@ -100,12 +100,44 @@ const isAllowedBaseUrl = (candidate) => {
 };
 
 // --- JWT CONFIGURATION - Story 6-4 ---
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    console.error('[FATAL] JWT_SECRET environment variable is required in production. Exiting.');
+    process.exit(1);
+}
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.JWT_SECRET) {
+    console.warn('[SECURITY] WARNING: Using generated JWT_SECRET. Sessions will not survive server restarts. Set JWT_SECRET env var for persistence.');
+}
 const SESSION_EXPIRY = parseInt(process.env.SESSION_EXPIRY || '86400', 10); // 24 hours in seconds
 const REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days in seconds
 
 // In-memory session store (use Redis in production)
 const activeSessions = new Map();
+const MAX_ACTIVE_SESSIONS = 1000;
+
+// Session cleanup: expire sessions older than SESSION_EXPIRY, cap at MAX_ACTIVE_SESSIONS
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [id, session] of activeSessions) {
+        if (session.createdAt && (now - session.createdAt) > SESSION_EXPIRY * 1000) {
+            activeSessions.delete(id);
+            cleaned++;
+        }
+    }
+    // Hard cap: remove oldest sessions if over limit
+    if (activeSessions.size > MAX_ACTIVE_SESSIONS) {
+        const sorted = [...activeSessions.entries()].sort((a, b) => (a[1].createdAt || 0) - (b[1].createdAt || 0));
+        const excess = activeSessions.size - MAX_ACTIVE_SESSIONS;
+        for (let i = 0; i < excess; i++) {
+            activeSessions.delete(sorted[i][0]);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) {
+        console.log(`[SESSION] Cleaned ${cleaned} expired sessions (${activeSessions.size} active)`);
+    }
+}, 60000); // Every 60 seconds
 
 // --- COMMAND SECURITY - Story 1.2 ---
 
@@ -435,6 +467,22 @@ const safePath = (inputPath, workspaceId = null) => {
     return resolved;
 };
 
+// Safe file write: detects symlinks before writing to prevent TOCTOU attacks
+const safeWriteFile = async (filePath, content, encodingOrOpts = 'utf-8') => {
+    try {
+        const stat = await fs.lstat(filePath);
+        if (stat.isSymbolicLink()) {
+            throw new Error('Access Denied: Cannot write to symbolic link');
+        }
+    } catch (e) {
+        // ENOENT = file doesn't exist yet, which is safe to create
+        if (e.code !== 'ENOENT') {
+            throw e;
+        }
+    }
+    await fs.writeFile(filePath, content, encodingOrOpts);
+};
+
 // Compatibility helper for legacy /api/files/read|write endpoints used in E2E tests.
 const resolveCompatWorkspacePath = (inputPath) => {
     if (typeof inputPath !== 'string' || !inputPath.trim()) {
@@ -585,7 +633,35 @@ async function start() {
         await fastify.register(csrf, {
             cookieOpts: { signed: true }
         });
-        fastify.log.info('[SECURITY] CSRF protection enabled');
+
+        // Enforce CSRF on all state-changing requests in production
+        // Exempt: auth login/register (no session yet), health check, and API routes using JWT Bearer auth
+        const csrfExemptPaths = ['/api/auth/login', '/api/auth/register', '/api/auth/csrf-token', '/health'];
+        fastify.addHook('onRequest', async (request, reply) => {
+            const method = request.method;
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                // Skip CSRF check for JWT Bearer-authenticated API calls (they use Authorization header)
+                const authHeader = request.headers['authorization'];
+                if (authHeader && authHeader.startsWith('Bearer ')) {
+                    return; // Bearer token provides its own CSRF protection
+                }
+                // Skip exempt paths
+                if (csrfExemptPaths.some(p => request.url.startsWith(p))) {
+                    return;
+                }
+                // Enforce CSRF for cookie-authenticated requests
+                if (request.cookies && Object.keys(request.cookies).length > 0) {
+                    try {
+                        await request.csrfVerify();
+                    } catch (err) {
+                        fastify.log.warn(`[SECURITY] CSRF validation failed: ${request.method} ${request.url} from ${request.ip}`);
+                        reply.code(403).send({ error: 'CSRF token validation failed' });
+                    }
+                }
+            }
+        });
+
+        fastify.log.info('[SECURITY] CSRF protection enabled and enforced on state-changing requests');
     }
 
     // 7. Security Event Logging Hook - Story 1.1 & 6-4
@@ -1230,7 +1306,9 @@ async function start() {
                 false,
                 e
             );
-            reply.code(404).send({ error: `File not found or unreadable. ${e.message}` });
+            // Distinguish access denied (403) from file not found (404)
+            const statusCode = e.message && e.message.includes('Access Denied') ? 403 : 404;
+            reply.code(statusCode).send({ error: `File not found or unreadable. ${e.message}` });
         }
     });
 
@@ -1252,7 +1330,8 @@ async function start() {
     });
 
     // File System: Write (with automatic checkpointing - Story 6-8)
-    fastify.post('/api/write', { preHandler: verifyToken }, async (request, reply) => {
+    const WRITE_BODY_LIMIT = 10 * 1024 * 1024; // 10MB max file write
+    fastify.post('/api/write', { preHandler: verifyToken, bodyLimit: WRITE_BODY_LIMIT }, async (request, reply) => {
         try {
             const { filePath, content, agentId, skipCheckpoint, workspaceId, encoding } = request.body;
 
@@ -1296,9 +1375,9 @@ async function start() {
                 if (typeof content !== 'string') {
                     return reply.code(400).send({ error: 'Base64 content must be a string' });
                 }
-                await fs.writeFile(cleanPath, Buffer.from(content, 'base64'));
+                await safeWriteFile(cleanPath, Buffer.from(content, 'base64'));
             } else {
-                await fs.writeFile(cleanPath, content, 'utf-8');
+                await safeWriteFile(cleanPath, content, 'utf-8');
             }
 
             await securityLogger.logFileWrite(
@@ -1331,7 +1410,7 @@ async function start() {
 
         try {
             await fs.mkdir(path.dirname(resolvedPath.resolved), { recursive: true });
-            await fs.writeFile(resolvedPath.resolved, content, 'utf-8');
+            await safeWriteFile(resolvedPath.resolved, content, 'utf-8');
             return { success: true, path: filePath };
         } catch (error) {
             return reply.code(500).send({ error: error.message });
@@ -1367,7 +1446,7 @@ async function start() {
                 await fs.mkdir(cleanPath, { recursive: true });
             } else {
                 await fs.mkdir(path.dirname(cleanPath), { recursive: true });
-                await fs.writeFile(cleanPath, '', 'utf-8');
+                await safeWriteFile(cleanPath, '', 'utf-8');
             }
 
             await securityLogger.logSecurityEvent(`file-create-${type}`, {
@@ -1574,7 +1653,7 @@ async function start() {
             }
 
             // Write the file
-            await fs.writeFile(finalPath, content, 'utf-8');
+            await safeWriteFile(finalPath, content, 'utf-8');
             fastify.log.info(`[FILES] File saved: ${finalPath}`);
 
             return {
@@ -1593,8 +1672,9 @@ async function start() {
     // Story 6-7: Diff Preview & Apply Endpoints
     // ========================================
 
-    // Pending diffs storage (in-memory for session)
+    // Pending diffs storage (in-memory for session, capped at 500 entries)
     const pendingDiffs = new Map();
+    const MAX_PENDING_DIFFS = 500;
     let diffIdCounter = 1;
 
     // Diff: Preview changes before applying
@@ -1654,6 +1734,12 @@ async function start() {
 
             pendingDiffs.set(diffId, diffRecord);
 
+            // Evict oldest diffs if over limit
+            if (pendingDiffs.size > MAX_PENDING_DIFFS) {
+                const oldest = pendingDiffs.keys().next().value;
+                pendingDiffs.delete(oldest);
+            }
+
             fastify.log.info(`[DIFF] Preview created: ${diffId} for ${filePath} (+${additions}/-${deletions})`);
 
             return {
@@ -1710,7 +1796,7 @@ async function start() {
 
             // Apply the changes
             await fs.mkdir(path.dirname(cleanPath), { recursive: true });
-            await fs.writeFile(cleanPath, diff.newContent, 'utf-8');
+            await safeWriteFile(cleanPath, diff.newContent, 'utf-8');
 
             // Update diff status
             diff.status = 'applied';
@@ -1856,13 +1942,17 @@ async function start() {
     // Checkpoint: Get checkpoints for a file
     fastify.get('/api/checkpoints', { preHandler: verifyToken }, async (request, reply) => {
         try {
-            const { filePath } = request.query;
+            const { filePath, workspaceId } = request.query;
 
             if (!filePath) {
                 return reply.code(400).send({ error: 'Missing filePath query parameter' });
             }
 
-            const cleanPath = safePath(filePath);
+            // Resolve workspace context (same pattern as /api/read)
+            const activeWorkspace = workspaceId ? null : await workspaceService.getActiveWorkspace();
+            const workspaceIdToUse = workspaceId || activeWorkspace?.id || null;
+
+            const cleanPath = safePath(filePath, workspaceIdToUse);
             const checkpoints = await checkpointService.getCheckpoints(cleanPath);
 
             return { checkpoints };
@@ -1970,13 +2060,17 @@ async function start() {
     // Checkpoint: Create manual checkpoint
     fastify.post('/api/checkpoints', { preHandler: verifyToken }, async (request, reply) => {
         try {
-            const { filePath, summary } = request.body;
+            const { filePath, summary, workspaceId } = request.body;
 
             if (!filePath) {
                 return reply.code(400).send({ error: 'Missing filePath' });
             }
 
-            const cleanPath = safePath(filePath);
+            // Resolve workspace context (same pattern as /api/read)
+            const activeWorkspace = workspaceId ? null : await workspaceService.getActiveWorkspace();
+            const workspaceIdToUse = workspaceId || activeWorkspace?.id || null;
+
+            const cleanPath = safePath(filePath, workspaceIdToUse);
 
             // Read current file content
             const content = await fs.readFile(cleanPath, 'utf-8');
@@ -2036,6 +2130,12 @@ async function start() {
                 .map(m => m.content)
                 .join('\n');
 
+            // Limit prompt length to prevent abuse (100KB max)
+            if (prompt.length > 100000) {
+                reply.code(400).send({ error: 'Prompt too long for CLI execution (max 100KB)' });
+                return;
+            }
+
             // Validate CLI command base against whitelist
             const cmdBase = cliCommand.trim().split(/\s+/)[0];
             const allowedBases = CLI_PROVIDER_COMMANDS[provider];
@@ -2070,7 +2170,11 @@ async function start() {
             const resolvedTokens = tokens.map(token => {
                 if (token.includes('{{prompt}}')) {
                     replaced = true;
-                    return token.replace('{{prompt}}', prompt);
+                    // Sanitize prompt: strip null bytes and control characters
+                    const sanitized = prompt
+                        .replace(/\0/g, '')
+                        .replace(/[\x01-\x1f\x7f]/g, ' ');
+                    return token.replace('{{prompt}}', sanitized);
                 }
                 return token;
             });
@@ -2180,7 +2284,7 @@ async function start() {
 
         } catch (error) {
             fastify.log.error(`[GATEWAY FAIL] ${error.message}`);
-            reply.code(500).send({ error: 'Failed to connect to AI Provider.' });
+            reply.code(500).send({ error: `Failed to connect to AI Provider. Ensure a local LLM server is running at ${targetUrl} or configure an API key in System > Connections.` });
         }
     });
 
@@ -2371,30 +2475,27 @@ async function start() {
             };
         }
 
-        // Git Log Tool - Story 1.2: Validated
+        // Git Log Tool - Story 1.2: Validated (using spawn for safety)
         if (tool === 'git_log') {
             // Validate args types to prevent injection
             const count = typeof args?.count === 'number' ? Math.min(Math.max(1, args.count), 100) : 10;
             const skip = typeof args?.skip === 'number' ? Math.max(0, args.skip) : 0;
 
-            const cmd = `git log --pretty=format:'%h|||%an|||%ad|||%s' --date=short -n ${count} --skip ${skip}`;
+            const gitArgs = ['log', '--pretty=format:%h|||%an|||%ad|||%s', '--date=short', '-n', String(count), '--skip', String(skip), '--'];
 
             fastify.log.info(`[COMMAND] Executing git_log: count=${count} skip=${skip} from ${clientIp}`);
 
-            return new Promise((resolve) => {
-                exec(cmd, EXEC_OPTIONS, (error, stdout, stderr) => {
-                    if (error) {
-                        fastify.log.warn(`[COMMAND] git_log failed from ${clientIp}: ${error.message}`);
-                        return resolve({ result: "[]" });
-                    }
-                    const lines = stdout.split('\n').filter(l => l.trim()).map(l => {
-                        const [hash, author, date, message] = l.split('|||');
-                        return { hash, author, date, message };
-                    });
-                    fastify.log.info(`[COMMAND] git_log success from ${clientIp}: ${lines.length} commits`);
-                    resolve({ result: JSON.stringify(lines) });
-                });
+            const result = await runCommandArgs('git', gitArgs, EXEC_OPTIONS, 15000);
+            if (result.error || result.exitCode !== 0) {
+                fastify.log.warn(`[COMMAND] git_log failed from ${clientIp}: ${result.stderr || result.error?.message}`);
+                return { result: "[]" };
+            }
+            const lines = result.stdout.split('\n').filter(l => l.trim()).map(l => {
+                const [hash, author, date, message] = l.split('|||');
+                return { hash, author, date, message };
             });
+            fastify.log.info(`[COMMAND] git_log success from ${clientIp}: ${lines.length} commits`);
+            return { result: JSON.stringify(lines) };
         }
 
         fastify.log.info(`[COMMAND] Unknown tool: ${tool} from ${clientIp}`);
@@ -2477,7 +2578,7 @@ async function start() {
             }
 
             // Write Dockerfile
-            await fs.writeFile(finalPath, dockerfileContent, 'utf-8');
+            await safeWriteFile(finalPath, dockerfileContent, 'utf-8');
             fastify.log.info(`[DOCKER] Dockerfile written to: ${finalPath}`);
 
             return {
@@ -2529,33 +2630,37 @@ async function start() {
             const imageTag = `${sanitizedImageName}:latest`;
             fastify.log.info(`[DOCKER] Validating Dockerfile: ${safeDockerfilePath}, image: ${imageTag}`);
 
-            // Build Docker image - Story 1.4: Fixed timeout handling
+            // Build Docker image - Story 1.4: Fixed timeout handling (using spawn for safety)
             const buildDir = path.dirname(safeDockerfilePath);
             const dockerfileName = path.basename(safeDockerfilePath);
-            const buildCommand = `docker build -t ${imageTag} -f ${dockerfileName} ${buildDir}`;
 
             const buildResult = await new Promise((resolve) => {
                 let killed = false;
-                const childProcess = exec(buildCommand, {
+                const childProcess = spawn('docker', ['build', '-t', imageTag, '-f', dockerfileName, buildDir], {
                     ...EXEC_OPTIONS,
                     cwd: buildDir,
-                    timeout: DOCKER_BUILD_TIMEOUT // Use exec's built-in timeout
-                }, (error, stdout, stderr) => {
+                    shell: false,
+                });
+                let stdout = '';
+                let stderr = '';
+                childProcess.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+                childProcess.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+
+                childProcess.on('close', (code) => {
                     if (killed) {
-                        resolve({ error: new Error('Docker build timeout after 10 minutes'), stdout: stdout || '', stderr: stderr || '' });
+                        resolve({ error: new Error('Docker build timeout after 10 minutes'), stdout, stderr });
                     } else {
-                        resolve({ error, stdout: stdout || '', stderr: stderr || '' });
+                        resolve({ error: code !== 0 ? new Error(`Docker build exited with code ${code}`) : null, stdout, stderr });
                     }
                 });
 
-                // Backup timeout in case exec timeout doesn't work
                 const timeout = setTimeout(() => {
-                    if (childProcess && !childProcess.killed) {
+                    if (!childProcess.killed) {
                         killed = true;
                         childProcess.kill('SIGTERM');
                         fastify.log.warn(`[DOCKER] Build killed due to timeout: ${imageTag}`);
                     }
-                }, DOCKER_BUILD_TIMEOUT + 5000); // 5 second grace period after exec timeout
+                }, DOCKER_BUILD_TIMEOUT);
 
                 childProcess.on('exit', () => clearTimeout(timeout));
             });
@@ -2782,7 +2887,7 @@ async function start() {
                 await fs.access(filePath);
             } catch {
                 const content = `# ${storyId}\n\n## Acceptance Criteria\n1. Generated for test harness\n\n- [ ] Implement\n`;
-                await fs.writeFile(filePath, content, 'utf-8');
+                await safeWriteFile(filePath, content, 'utf-8');
                 broadcast('story:created', {
                     path: `stories/${storyId}.md`,
                     storyId,
@@ -3267,7 +3372,7 @@ async function start() {
 
                 // Write resolved file
                 const fullPath = safePath(conflict.filePath);
-                await fs.writeFile(fullPath, mergedContent, 'utf-8');
+                await safeWriteFile(fullPath, mergedContent, 'utf-8');
 
                 // Broadcast resolution
                 broadcast('conflict:resolved', {
@@ -3301,7 +3406,7 @@ ${contentB}
  */`;
 
                 const fullConflictPath = safePath(conflictFilePath);
-                await fs.writeFile(fullConflictPath, conflictFileContent, 'utf-8');
+                await safeWriteFile(fullConflictPath, conflictFileContent, 'utf-8');
 
                 conflict.conflictFilePath = conflictFilePath;
 
@@ -3362,7 +3467,7 @@ ${contentB}
         // Write resolved file
         try {
             const fullPath = safePath(conflict.filePath);
-            await fs.writeFile(fullPath, resolvedContent, 'utf-8');
+            await safeWriteFile(fullPath, resolvedContent, 'utf-8');
 
             // Broadcast resolution
             broadcast('conflict:resolved', {
@@ -4183,6 +4288,21 @@ ${contentB}
         } catch (mcpErr) {
             console.error('[MCP] Failed to initialize MCP adapter:', mcpErr.message);
         }
+        // Graceful shutdown handlers
+        const shutdown = async (signal) => {
+            console.log(`[SERVER] ${signal} received. Shutting down gracefully...`);
+            try {
+                await fastify.close();
+                console.log('[SERVER] Server closed successfully.');
+                process.exit(0);
+            } catch (err) {
+                console.error('[SERVER] Error during shutdown:', err);
+                process.exit(1);
+            }
+        };
+        process.on('SIGTERM', () => shutdown('SIGTERM'));
+        process.on('SIGINT', () => shutdown('SIGINT'));
+
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);

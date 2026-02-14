@@ -107,8 +107,23 @@ const TheGitLog: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto p-0 bg-scanlines custom-scrollbar">
                 {error && (
-                    <div className="p-4 text-red-400 text-[10px] flex items-center gap-2 bg-red-900/10 border-b border-red-500/20">
-                        <AlertCircle size={12} /> {error}
+                    <div className="flex flex-col items-center justify-center h-64 gap-3 px-8 text-center">
+                        <AlertCircle size={32} style={{ color: 'rgba(255, 100, 50, 0.5)' }} />
+                        <div className="text-xs font-mono" style={{ color: 'rgba(255, 100, 50, 0.7)' }}>
+                            {error}
+                        </div>
+                    </div>
+                )}
+
+                {!loading && commits.length === 0 && !error && (
+                    <div className="flex flex-col items-center justify-center h-64 gap-4 px-8 text-center">
+                        <GitBranch size={48} style={{ color: 'rgba(255, 100, 50, 0.3)' }} />
+                        <div className="text-sm font-bold uppercase tracking-wider" style={{ color: 'rgba(255, 100, 50, 0.6)' }}>
+                            No Repository Detected
+                        </div>
+                        <div className="text-[10px] font-mono max-w-xs" style={{ color: 'rgba(0, 240, 255, 0.4)' }}>
+                            Initialize a git repository in your workspace to view commit history.
+                        </div>
                     </div>
                 )}
 
