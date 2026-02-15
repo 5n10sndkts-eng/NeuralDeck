@@ -223,13 +223,26 @@ class WorkspaceService {
      */
     async getActiveWorkspace() {
         await this.init();
-        
+
         if (!this.config.activeWorkspaceId) {
             return null;
         }
 
         const workspace = this.config.workspaces.find(w => w.id === this.config.activeWorkspaceId);
-        return workspace || null;
+        if (!workspace) return null;
+
+        // Validate the workspace path still exists on disk
+        try {
+            await fs.access(workspace.path);
+        } catch {
+            // Path no longer exists - clear the active workspace silently
+            console.warn(`[WORKSPACE] Active workspace path no longer exists: ${workspace.path}. Deactivating.`);
+            this.config.activeWorkspaceId = null;
+            await this._saveConfig();
+            return null;
+        }
+
+        return workspace;
     }
 
     /**
@@ -308,7 +321,15 @@ class WorkspaceService {
         // Validate workspace still exists
         const validation = await this.validateWorkspacePath(workspace.path);
         if (!validation.valid) {
-            throw new Error(`Workspace no longer valid: ${validation.error}`);
+            // Mark the workspace as stale so the frontend can show the user
+            workspace.stale = true;
+            await this._saveConfig();
+            throw new Error(`Workspace path no longer accessible: ${validation.error}. Path: ${workspace.path}`);
+        }
+
+        // Clear stale flag if it was set before
+        if (workspace.stale) {
+            delete workspace.stale;
         }
 
         // Update last opened time

@@ -99,16 +99,23 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setError(null);
       const workspace = await apiActivateWorkspace(id);
       setCurrentWorkspace(workspace);
-      
+
       // Load files for the newly activated workspace
       const workspaceFiles = await fetchFiles(workspace.id);
       setFiles(workspaceFiles);
-      
+
       // Refresh workspaces list to update lastOpened times
       const { workspaces } = await getWorkspaces();
       setRecentWorkspaces(workspaces);
     } catch (err: any) {
       console.error('[WORKSPACE] Failed to open workspace:', err);
+      // If workspace path no longer exists, refresh the list to get updated state
+      if (err.message?.includes('no longer') || err.message?.includes('Path does not exist')) {
+        const { workspaces, active } = await getWorkspaces();
+        setRecentWorkspaces(workspaces);
+        setCurrentWorkspace(active);
+        if (!active) setFiles([]);
+      }
       setError(err.message);
       throw err;
     } finally {

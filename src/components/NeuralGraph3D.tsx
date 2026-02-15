@@ -15,7 +15,19 @@ interface Props {
 export const NeuralGraph3D: React.FC<Props> = ({ nodes, edges }) => {
     return (
         <div className="w-full h-full relative rounded-lg overflow-hidden bg-black/90">
-            <Canvas camera={{ position: [0, 0, 20], fov: 75 }}>
+            <Canvas
+                camera={{ position: [0, 0, 20], fov: 75 }}
+                onCreated={({ gl }) => {
+                    const canvas = gl.domElement;
+                    canvas.addEventListener('webglcontextlost', (e) => {
+                        e.preventDefault();
+                        logger.warn('[3D] WebGL context lost - will restore on re-render');
+                    });
+                    canvas.addEventListener('webglcontextrestored', () => {
+                        logger.info('[3D] WebGL context restored');
+                    });
+                }}
+            >
                 <color attach="background" args={['#050510']} />
 
                 {/* Lighting */}

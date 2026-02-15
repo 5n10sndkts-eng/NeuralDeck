@@ -7,6 +7,7 @@ import { FileNode, AgentProfile } from '../types';
 import { GraphNode } from './Construct/GraphNode';
 import { DataBeam } from './Construct/DataBeam';
 import { AgentDrone } from './Construct/AgentDrone';
+import { logger } from '@/services/logger';
 
 // --- CONSTANTS ---
 const COLORS = {
@@ -81,7 +82,17 @@ const SceneContent = ({ files, onFileSelect, activeAgents }: { files: FileNode[]
 const CyberVerse: React.FC<{ files: FileNode[], onFileSelect: (path: string) => void, activeAgents: AgentProfile[] }> = ({ files, onFileSelect, activeAgents = [] }) => {
     return (
         <div className="w-full h-full bg-black relative">
-            <Canvas gl={{ antialias: false, powerPreference: "high-performance" }} dpr={[1, 1.5]}>
+            <Canvas
+                gl={{ antialias: false, powerPreference: "high-performance" }}
+                dpr={[1, 1.5]}
+                onCreated={({ gl }) => {
+                    const canvas = gl.domElement;
+                    canvas.addEventListener('webglcontextlost', (e) => {
+                        e.preventDefault();
+                        logger.warn('[3D] WebGL context lost - will restore on re-render');
+                    });
+                }}
+            >
                 <PerspectiveCamera makeDefault position={[0, 0, 30]} fov={45} />
                 <OrbitControls enableZoom={true} enablePan={true} autoRotate autoRotateSpeed={0.2} maxDistance={60} minDistance={5} />
 

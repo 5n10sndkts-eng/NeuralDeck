@@ -3,8 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { Database, Save, RefreshCw, FileJson, Shield, Cpu, Binary } from 'lucide-react';
 import { readFile, writeFile, ingestContext } from '../services/api';
 import { SoundEffects } from '../services/sound';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 const TheConstruct: React.FC = () => {
+    const { currentWorkspace } = useWorkspace();
     const [content, setContent] = useState('');
     const [loading, setLoading] = useState(false);
     const [mode, setMode] = useState<'raw' | 'visual'>('raw');
@@ -15,7 +17,7 @@ const TheConstruct: React.FC = () => {
     const loadContext = async () => {
         setLoading(true);
         try {
-            const data = await readFile(CONTEXT_FILE);
+            const data = await readFile(CONTEXT_FILE, currentWorkspace?.id);
             if (!data || data.includes('Error reading file')) {
                 throw new Error("File not found");
             }
@@ -54,7 +56,7 @@ const TheConstruct: React.FC = () => {
     const handleSave = async () => {
         setLoading(true);
         try {
-            await writeFile(CONTEXT_FILE, content);
+            await writeFile(CONTEXT_FILE, content, currentWorkspace?.id);
             await ingestContext(content); // Force Re-ingest to MCP if needed
             SoundEffects.success();
         } catch (e) {
@@ -66,7 +68,7 @@ const TheConstruct: React.FC = () => {
 
     useEffect(() => {
         loadContext();
-    }, []);
+    }, [currentWorkspace?.id]);
 
     return (
         <div className="w-full h-full flex flex-col font-mono relative overflow-hidden" style={{ backgroundColor: 'var(--color-void)', color: 'var(--color-green)' }}>

@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { Hexagon, Package, Trash2, Plus, RefreshCw, ShieldCheck, Layers, Play, Terminal, Lock } from 'lucide-react';
 import { readFile, callMCPTool } from '../services/api';
 import { SoundEffects } from '../services/sound';
+import { useWorkspace } from '../contexts/WorkspaceContext';
 
 const TheGrid: React.FC = () => {
+  const { currentWorkspace } = useWorkspace();
   const [packages, setPackages] = useState<{ name: string, version: string, type: 'dep' | 'dev' }[]>([]);
   const [scripts, setScripts] = useState<{ name: string, cmd: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -15,7 +17,7 @@ const TheGrid: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-        const raw = await readFile('package.json');
+        const raw = await readFile('package.json', currentWorkspace?.id);
         if (!raw || raw.includes('Error')) {
             setPackages([]);
             setScripts([]);
@@ -97,7 +99,7 @@ const TheGrid: React.FC = () => {
 
   useEffect(() => {
       fetchData();
-  }, []);
+  }, [currentWorkspace?.id]);
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden relative" style={{ backgroundColor: 'var(--color-void)' }}>

@@ -490,7 +490,7 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
     );
 
     return (
-        <div className="w-full h-full bg-[#050505]" data-testid="neural-grid">
+        <div className="w-full h-full bg-[#050505]" style={{ minHeight: '300px' }} data-testid="neural-grid">
             <ReactFlow
                 nodes={nodes}
                 edges={edges}

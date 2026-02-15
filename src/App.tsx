@@ -880,6 +880,13 @@ const AppContent: React.FC = () => {
                         </Suspense>
                     </ChunkErrorBoundary>
                 );
+            case 'terminal':
+                return (
+                    <div className="flex flex-col items-center justify-center h-full font-mono" style={{ backgroundColor: 'var(--color-void)' }}>
+                        <div style={{ color: 'var(--color-cyan)', opacity: 0.4 }} className="text-sm tracking-widest uppercase mb-2">Terminal Module</div>
+                        <div style={{ color: 'var(--color-cyan)', opacity: 0.2 }} className="text-xs">Coming Soon</div>
+                    </div>
+                );
             default: return (
                 <div className="flex items-center justify-center h-full text-cyber-cyan opacity-50 font-mono">
                     MODULE_OFFLINE
