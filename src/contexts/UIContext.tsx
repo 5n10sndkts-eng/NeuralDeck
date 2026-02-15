@@ -87,7 +87,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         } else if (mode === 'ALERT') {
             setMode('IDLE');
         }
-    }, [isAlert]);
+    }, [isAlert, mode]);
 
     return (
         <UIContext.Provider value={{

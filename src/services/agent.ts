@@ -331,7 +331,7 @@ export const runAgentCycle = async (
                 action = JSON.parse(jsonStr);
             }
         } catch (parseError) {
-            // Fail silently on parse
+            console.warn('[Agent] Failed to parse action JSON from LLM response:', (parseError as Error).message);
         }
 
         return { responseMsg: response, action };

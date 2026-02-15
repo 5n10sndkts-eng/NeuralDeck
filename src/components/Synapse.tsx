@@ -64,10 +64,8 @@ export const SimpleSynapse: React.FC<Props> = ({ source, target }) => {
 
     const points = [start, end];
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: '#00f0ff', transparent: true, opacity: 0.2, linewidth: 1 });
+    const lineObj = new THREE.Line(geometry, material);
 
-    return (
-        <line geometry={geometry}>
-            <lineBasicMaterial color="#00f0ff" transparent opacity={0.2} linewidth={1} />
-        </line>
-    );
+    return <primitive ref={ref} object={lineObj} />;
 };

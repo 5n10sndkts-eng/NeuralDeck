@@ -112,7 +112,7 @@ export const sendChat = async (messages: ChatMessage[], config?: LlmConfig): Pro
       body: JSON.stringify({
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         temperature: 0.2,
-        config: config || { provider: 'lmstudio', model: 'openai/gpt-oss-20b', baseUrl: 'http://192.168.100.190:1234/v1' }
+        config: config || { provider: 'lmstudio', model: 'openai/gpt-oss-20b', baseUrl: 'http://localhost:1234/v1' }
       }),
     });
     const data = await res.json();

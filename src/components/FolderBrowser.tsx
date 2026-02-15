@@ -53,7 +53,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({ initialPath, onSel
 
   // Navigate to home directory
   const navigateHome = () => {
-    navigate();
+    loadDirectory();
   };
 
   // Handle manual path input

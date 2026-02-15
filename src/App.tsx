@@ -49,14 +49,12 @@ const TheGrid = lazy(() => import('./components/TheGrid'));
 const TheGitLog = lazy(() => import('./components/TheGitLog'));
 
 // Hooks & Services
-import { useVoice } from './hooks/useVoiceInput';
-import { parseVoiceCommand } from './services/voiceCommandParser';
+import { useAudioSystem } from './hooks/useAudioSystem';
+import { useVoiceCommands } from './hooks/useVoiceCommands';
 import { useNeuralAutonomy } from './hooks/useNeuralAutonomy';
 import { fetchFiles, sendChat, readFile, writeFile } from './services/api';
 import { authService } from './services/auth';
-import { GlobalAudio } from './services/audioEngine';
 import { SoundEffects } from './services/sound';
-import type { AmbientMood } from './services/ambientGenerator';
 import { AGENT_DEFINITIONS } from './services/agent';
 import { storageManager } from './services/storageManager';
 import { FileNode, ChatMessage, ConnectionProfile, ViewMode, AgentProfile } from './types';
@@ -120,43 +118,38 @@ const AppContent: React.FC = () => {
     const [showWorkspaceManager, setShowWorkspaceManager] = useState(false);
     const [showAgentChat, setShowAgentChat] = useState(false);
 
-    // Settings / Config - Initialize from LocalStorage
-    const [profiles, setProfiles] = useState<ConnectionProfile[]>(() => {
-        const saved = localStorage.getItem('neural_profiles');
-        return saved ? JSON.parse(saved) : [{
-            id: 'default', name: 'LM Studio', provider: 'lmstudio', model: 'openai/gpt-oss-20b', baseUrl: 'http://192.168.100.190:1234/v1'
-        }];
-    });
+    // Settings / Config - Initialize from LocalStorage (with safe JSON parsing)
+    const safeParse = <T,>(key: string, fallback: T): T => {
+        try {
+            const saved = localStorage.getItem(key);
+            return saved ? JSON.parse(saved) : fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
+    const [profiles, setProfiles] = useState<ConnectionProfile[]>(() =>
+        safeParse('neural_profiles', [{
+            id: 'default', name: 'LM Studio', provider: 'lmstudio', model: 'openai/gpt-oss-20b', baseUrl: 'http://localhost:1234/v1'
+        }])
+    );
 
     const [activeProfileId, setActiveProfileId] = useState(() => localStorage.getItem('neural_active_profile') || 'default');
 
-    const [agentRouting, setAgentRouting] = useState<Record<string, string>>(() => {
-        const saved = localStorage.getItem('neural_routing');
-        return saved ? JSON.parse(saved) : {};
-    });
+    const [agentRouting, setAgentRouting] = useState<Record<string, string>>(
+        () => safeParse('neural_routing', {} as Record<string, string>)
+    );
 
     const [godMode, setGodMode] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
     const [isSupervised, setIsSupervised] = useState(false);
     const [manualSelectedAgent, setManualSelectedAgent] = useState<AgentProfile>('analyst');
     const [droppedFile, setDroppedFile] = useState<File | null>(null);
     const [visionAnalysisLog, setVisionAnalysisLog] = useState<string[]>([]);
-    const [showVoiceHelp, setShowVoiceHelp] = useState(false);
-    const [audioVolume, setAudioVolume] = useState(() => {
-        const saved = localStorage.getItem('audio_volume');
-        return saved ? parseFloat(saved) : 0.4;
-    });
-    const [audioMood, setAudioMood] = useState<AmbientMood>(() => {
-        const saved = localStorage.getItem('audio_mood');
-        return (saved as AmbientMood) || 'focus';
-    });
 
     // Persistence Effects
     useEffect(() => { localStorage.setItem('neural_profiles', JSON.stringify(profiles)); }, [profiles]);
     useEffect(() => { localStorage.setItem('neural_active_profile', activeProfileId); }, [activeProfileId]);
     useEffect(() => { localStorage.setItem('neural_routing', JSON.stringify(agentRouting)); }, [agentRouting]);
-    useEffect(() => { localStorage.setItem('audio_volume', audioVolume.toString()); }, [audioVolume]);
-    useEffect(() => { localStorage.setItem('audio_mood', audioMood); }, [audioMood]);
 
     // Storage auto-cleanup initialization (Story 6-2)
     useEffect(() => {
@@ -165,67 +158,11 @@ const AppContent: React.FC = () => {
         });
     }, []);
 
-    // --- AUDIO SYSTEM (Unified) ---
-    // isMuted is already defined at line 98
-    const toggleAudio = async () => {
-        const muted = await GlobalAudio.toggle();
-        setIsMuted(muted);
-    };
-
-    // Auto-update GlobalAudio mode based on UI phase
-    useEffect(() => {
-        GlobalAudio.setMode(mode === 'ALERT' ? 'ALERT' : (mode === 'CODING' ? 'CODING' : 'IDLE'));
-    }, [mode]);
-
-    // Initialize GlobalAudio and sync initial state
-    useEffect(() => {
-        GlobalAudio.init(audioVolume, audioMood);
-        GlobalAudio.setMuted(isMuted);
-        GlobalAudio.setMode(mode === 'ALERT' ? 'ALERT' : (mode === 'CODING' ? 'CODING' : 'IDLE'));
-
-        if (activeAgents.length === 0) {
-            GlobalAudio.setAgentState('idle');
-        } else if (activeAgents.length === 1) {
-            GlobalAudio.setAgentState('working');
-        } else {
-            GlobalAudio.setAgentState('swarm');
-        }
-    }, []);
-
-    // Update GlobalAudio based on agent state
-    useEffect(() => {
-        if (activeAgents.length === 0) {
-            GlobalAudio.setAgentState('idle');
-        } else if (activeAgents.length === 1) {
-            GlobalAudio.setAgentState('working');
-        } else {
-            GlobalAudio.setAgentState('swarm');
-        }
-    }, [activeAgents]);
-
-    // Handle mute/volume changes
-    useEffect(() => {
-        GlobalAudio.init(audioVolume, audioMood);
-    }, [isMuted, audioVolume]);
-
-    // Mood changes handled by GlobalAudio.setMood internally if added, 
-    // but for now let's just use setMode as defined.
-
-    // Keyboard shortcut for mute (M key)
-    useEffect(() => {
-        const handleKeyPress = (e: KeyboardEvent) => {
-            if (e.key === 'm' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                // Only if not typing in an input
-                const target = e.target as HTMLElement;
-                if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-                    setIsMuted(!isMuted);
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyPress);
-        return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [isMuted]);
+    // --- AUDIO SYSTEM (Extracted Hook) ---
+    const { isMuted, setIsMuted, audioVolume, setAudioVolume, audioMood, setAudioMood, toggleAudio } = useAudioSystem({
+        uiMode: mode,
+        activeAgentCount: activeAgents.length,
+    });
 
     // Adaptive UI Logic
     useEffect(() => {
@@ -236,57 +173,11 @@ const AppContent: React.FC = () => {
         }
     }, [mode]);
 
-    // --- VOICE INPUT HOOK ---
-    const voice = useVoice();
-
-    useEffect(() => {
-        if (voice.transcript) {
-            const command = parseVoiceCommand(voice.transcript, 1.0, 0.7);
-            if (command) {
-                // Execute command
-                const [category, action] = command.action.split(':');
-
-                if (category === 'navigation') {
-                    const viewMap: Record<string, ViewMode> = {
-                        workspace: 'workspace',
-                        construct: 'construct',
-                        terminal: 'terminal',
-                        dashboard: 'workspace',
-                    };
-                    if (viewMap[action]) {
-                        setView(viewMap[action]);
-                    }
-                    // Activate specific agent
-                    const agentName = command.target.toLowerCase();
-                    const agentEntry = Object.entries(AGENT_DEFINITIONS).find(([_, d]) => d.name.toLowerCase() === agentName);
-                    if (agentEntry) {
-                        setManualSelectedAgent(agentEntry[0] as AgentProfile);
-                    }
-                } else if (category === 'system' && action === 'help') {
-                    setShowVoiceHelp(true);
-                }
-
-                voice.resetTranscript();
-            }
-        }
-    }, [voice.transcript]);
-
-    // Keyboard shortcut for voice toggle (Cmd/Ctrl + Shift + V)
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'v') {
-                e.preventDefault();
-                if (voice.isListening) {
-                    voice.stopListening();
-                } else {
-                    voice.startListening();
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [voice]);
+    // --- VOICE COMMANDS (Extracted Hook) ---
+    const { voice, showVoiceHelp, setShowVoiceHelp } = useVoiceCommands({
+        onViewChange: setView,
+        onAgentSelect: setManualSelectedAgent,
+    });
 
     // --- AUTONOMY HOOK ---
     const activeConfig = profiles.find(p => p.id === activeProfileId) || profiles[0];
@@ -296,25 +187,10 @@ const AppContent: React.FC = () => {
         await refreshFiles();
     };
 
-    // --- STATE & DATA ---
-    // MIGRATION: Replaced useNeuralAutonomy (Client-Side) with useSocket (Server-Side Cortex)
-    // const { phase, logs, activeAgents, isAutoMode, toggleAuto, currentThought } = useSocket(); // This line was moved to the top
-
-    // --- AUDIO ENGINE SYNC ---
-    // Sync activeAgents from Socket to UI Context
-    useEffect(() => {
-        if (activeAgents) {
-            setUIImplActiveAgents(activeAgents);
-        }
-    }, [activeAgents, setUIImplActiveAgents]);
-
-    // --- LAYOUT ---
     // --- INITIALIZATION ---
-    // --- INITIALIZATION ---
+    // Initial file load (real-time updates handled by WebSocket file watcher)
     useEffect(() => {
         loadFiles();
-        const interval = setInterval(() => loadFiles(true), 5000); // Poll FS silently
-        return () => clearInterval(interval);
     }, []);
 
     // Show workspace manager on first run if no workspace selected
@@ -834,16 +710,18 @@ const AppContent: React.FC = () => {
     );
 };
 
-// Root App Wrapper
+// Root App Wrapper with top-level error boundary
 const App: React.FC = () => {
     return (
-        <UIProvider>
-            <ConversationProvider>
-                <WorkspaceProvider>
-                    <AppContent />
-                </WorkspaceProvider>
-            </ConversationProvider>
-        </UIProvider>
+        <ChunkErrorBoundary>
+            <UIProvider>
+                <ConversationProvider>
+                    <WorkspaceProvider>
+                        <AppContent />
+                    </WorkspaceProvider>
+                </ConversationProvider>
+            </UIProvider>
+        </ChunkErrorBoundary>
     );
 };
 

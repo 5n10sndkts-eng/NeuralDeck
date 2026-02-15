@@ -45,9 +45,9 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
         colors: []
       });
 
-      // WHEN analyzing an image
+      // WHEN analyzing an image (mocked - cast File to string for test purposes)
       const mockFile = new File(['fake-image-data'], 'mockup.png', { type: 'image/png' });
-      await visionAnalyzer.analyzeUIImage(mockFile);
+      await visionAnalyzer.analyzeUIImage(mockFile as unknown as string);
 
       // THEN API key should NOT be passed from client
       // (Should use backend proxy endpoint instead)
@@ -68,9 +68,9 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
         json: async () => ({ components: [], layout: 'grid', colors: [] })
       });
 
-      // WHEN analyzing an image
+      // WHEN analyzing an image (mocked)
       const mockFile = new File(['fake-image-data'], 'mockup.png', { type: 'image/png' });
-      await visionAnalyzer.analyzeUIImage(mockFile);
+      await visionAnalyzer.analyzeUIImage(mockFile as unknown as string);
 
       // THEN should call backend proxy (not api.openai.com directly)
       expect(global.fetch).toHaveBeenCalled();
@@ -86,9 +86,9 @@ describe('[P0] Vision Pipeline - Security & Data Integrity', () => {
       const consoleLogSpy = jest.spyOn(console, 'log');
       const consoleErrorSpy = jest.spyOn(console, 'error');
       
-      // WHEN vision analyzer runs
+      // WHEN vision analyzer runs (mocked)
       const mockFile = new File(['fake-image-data'], 'mockup.png', { type: 'image/png' });
-      visionAnalyzer.analyzeUIImage(mockFile);
+      visionAnalyzer.analyzeUIImage(mockFile as unknown as string);
       
       // THEN no API keys should be logged
       const logCalls = consoleLogSpy.mock.calls.flat().join(' ');

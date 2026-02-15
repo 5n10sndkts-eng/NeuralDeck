@@ -3,7 +3,6 @@
  * Tests virtualized rendering for TheTerminal component
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';

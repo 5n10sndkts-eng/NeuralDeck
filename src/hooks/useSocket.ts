@@ -1,264 +1,36 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { LogEntry, NeuralPhase } from './useNeuralAutonomy'; // Reuse types for now
-import { AgentProfile, AgentNodeState, VulnerabilityFinding, SecurityReport, VulnerabilitySeverity } from '../types';
+import { LogEntry, NeuralPhase } from './useNeuralAutonomy';
+import { AgentProfile } from '../types';
 import { authService } from '../services/auth';
 
-// --- CONNECTION STATE TYPES (Story 6-6) ---
+// Re-export all types for backwards compatibility
+export type {
+    ConnectionState, ConnectionInfo, Delta, VersionedState,
+    SwarmStartedEvent, SwarmNodeStartedEvent, SwarmNodeProgressEvent,
+    SwarmNodeCompletedEvent, SwarmProgressEvent, SwarmCompletedEvent, SwarmCancelledEvent,
+    ConflictDetectedEvent, ConflictResolvedEvent, ConflictFailedEvent,
+    ConflictStatus, ConflictState,
+    SecurityScanStartedEvent, SecurityFindingDiscoveredEvent, SecurityFindingUpdatedEvent,
+    SecurityScanCompletedEvent, SecurityScanCancelledEvent,
+    SecurityScanState, SwarmExecutionState, ConflictManagerState,
+} from './useSocketTypes';
+export { applyDelta } from './useSocketTypes';
 
-export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'disconnected' | 'stale';
-
-export interface ConnectionInfo {
-    state: ConnectionState;
-    reconnectAttempt: number;
-    lastConnectedAt: number | null;
-    disconnectedAt: number | null;
-    reconnectCountdown: number | null;
-}
-
-// --- DELTA UPDATE TYPES (Story 6-6) ---
-
-export interface Delta<T> {
-    version: number;
-    timestamp: number;
-    changes: Partial<T>;
-    removals: string[];
-}
-
-export interface VersionedState {
-    version: number;
-    timestamp: number;
-}
-
-/**
- * Apply a delta to a state object
- * @param state - Current state
- * @param delta - Delta to apply
- * @returns New state with delta applied
- */
-export function applyDelta<T extends object>(state: T, delta: Delta<Partial<T>>): T {
-    const newState = { ...state };
-
-    // Apply changes
-    if (delta.changes) {
-        Object.assign(newState, delta.changes);
-    }
-
-    // Apply removals
-    if (delta.removals) {
-        for (const key of delta.removals) {
-            delete (newState as Record<string, unknown>)[key];
-        }
-    }
-
-    return newState;
-}
-
-// --- SWARM EVENT TYPES (Story 4-2) ---
-
-export interface SwarmStartedEvent {
-    executionId: string;
-    storyIds: string[];
-    timestamp: number;
-}
-
-export interface SwarmNodeStartedEvent {
-    executionId: string;
-    nodeId: string;
-    storyId: string;
-    storyTitle: string;
-    timestamp: number;
-}
-
-export interface SwarmNodeProgressEvent {
-    executionId: string;
-    nodeId: string;
-    storyId: string;
-    state: AgentNodeState;
-    progress: number;
-    timestamp: number;
-}
-
-export interface SwarmNodeCompletedEvent {
-    executionId: string;
-    nodeId: string;
-    storyId: string;
-    status: 'success' | 'error' | 'timeout';
-    duration: number;
-    error?: string;
-    timestamp: number;
-}
-
-export interface SwarmProgressEvent {
-    executionId: string;
-    completed: number;
-    total: number;
-    timestamp: number;
-}
-
-export interface SwarmCompletedEvent {
-    executionId: string;
-    status: 'completed' | 'partial' | 'failed';
-    successCount: number;
-    failureCount: number;
-    totalDuration: number;
-    parallelismVerified: boolean;
-    timestamp: number;
-}
-
-export interface SwarmCancelledEvent {
-    executionId: string;
-    timestamp: number;
-}
-
-// --- CONFLICT EVENT TYPES (Story 4-3) ---
-
-export interface ConflictDetectedEvent {
-    conflictId: string;
-    filePath: string;
-    developerA: string;
-    developerB: string;
-    timestamp: number;
-}
-
-export interface ConflictResolvedEvent {
-    conflictId: string;
-    filePath: string;
-    method: 'auto' | 'manual' | 'append' | 'replace' | 'combine';
-    timestamp: number;
-}
-
-export interface ConflictFailedEvent {
-    conflictId: string;
-    filePath: string;
-    error: string;
-    timestamp: number;
-}
-
-export type ConflictStatus = 'pending' | 'auto-resolving' | 'manual-required' | 'resolved' | 'failed';
-
-export interface ConflictState {
-    conflictId: string;
-    filePath: string;
-    developerA: string;
-    developerB: string;
-    status: ConflictStatus;
-    createdAt: number;
-}
-
-// --- SECURITY EVENT TYPES (Story 5-3) ---
-
-export interface SecurityScanStartedEvent {
-    scanId: string;
-    agents: string[];
-    timestamp: number;
-}
-
-export interface SecurityFindingDiscoveredEvent {
-    scanId: string;
-    finding: VulnerabilityFinding;
-    timestamp: number;
-}
-
-export interface SecurityFindingUpdatedEvent {
-    scanId: string;
-    findingId: string;
-    status: 'open' | 'reviewed' | 'fixed' | 'false_positive';
-    timestamp: number;
-}
-
-export interface SecurityScanCompletedEvent {
-    scanId: string;
-    summary: {
-        critical: number;
-        high: number;
-        medium: number;
-        low: number;
-        total: number;
-    };
-    timestamp: number;
-}
-
-export interface SecurityScanCancelledEvent {
-    scanId: string;
-    timestamp: number;
-}
-
-// Security state for UI (Story 5-3)
-export interface SecurityScanState {
-    scanId: string | null;
-    status: 'idle' | 'scanning' | 'completed' | 'cancelled' | 'failed';
-    findings: VulnerabilityFinding[];
-    summary: {
-        critical: number;
-        high: number;
-        medium: number;
-        low: number;
-        total: number;
-    };
-    startTime: number | null;
-    endTime: number | null;
-}
-
-const initialSecurityState: SecurityScanState = {
-    scanId: null,
-    status: 'idle',
-    findings: [],
-    summary: { critical: 0, high: 0, medium: 0, low: 0, total: 0 },
-    startTime: null,
-    endTime: null,
-};
-
-// --- CONNECTION STATE (Story 6-6) ---
-
-const initialConnectionInfo: ConnectionInfo = {
-    state: 'disconnected',
-    reconnectAttempt: 0,
-    lastConnectedAt: null,
-    disconnectedAt: null,
-    reconnectCountdown: null,
-};
-
-// Stale connection threshold (5 minutes)
-const STALE_THRESHOLD_MS = 5 * 60 * 1000;
-
-// Swarm execution state for UI
-export interface SwarmExecutionState {
-    executionId: string | null;
-    status: 'idle' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled';
-    nodeStates: Map<string, { storyId: string; state: AgentNodeState; progress: number }>;
-    progress: { completed: number; total: number };
-    startTime: number | null;
-    endTime: number | null;
-    totalDuration: number | null;
-    parallelismVerified: boolean | null;
-}
-
-const initialSwarmState: SwarmExecutionState = {
-    executionId: null,
-    status: 'idle',
-    nodeStates: new Map(),
-    progress: { completed: 0, total: 0 },
-    startTime: null,
-    endTime: null,
-    totalDuration: null,
-    parallelismVerified: null,
-};
-
-// Conflict state for UI (Story 4-3)
-export interface ConflictManagerState {
-    conflicts: Map<string, ConflictState>;
-    pendingCount: number;
-    resolvedCount: number;
-    lastConflict: ConflictState | null;
-}
-
-const initialConflictState: ConflictManagerState = {
-    conflicts: new Map(),
-    pendingCount: 0,
-    resolvedCount: 0,
-    lastConflict: null,
-};
+import type {
+    ConnectionInfo, Delta,
+    SwarmStartedEvent, SwarmNodeStartedEvent, SwarmNodeProgressEvent,
+    SwarmNodeCompletedEvent, SwarmProgressEvent, SwarmCompletedEvent, SwarmCancelledEvent,
+    ConflictDetectedEvent, ConflictResolvedEvent, ConflictFailedEvent,
+    ConflictStatus, ConflictState,
+    SecurityScanStartedEvent, SecurityFindingDiscoveredEvent, SecurityFindingUpdatedEvent,
+    SecurityScanCompletedEvent, SecurityScanCancelledEvent,
+    SecurityScanState, SwarmExecutionState, ConflictManagerState,
+} from './useSocketTypes';
+import {
+    initialSecurityState, initialSwarmState, initialConflictState,
+    initialConnectionInfo, STALE_THRESHOLD_MS,
+} from './useSocketTypes';
 
 export const useSocket = () => {
     const [socket, setSocket] = useState<Socket | null>(null);
@@ -655,9 +427,11 @@ export const useSocket = () => {
                 };
             });
 
+            // TODO: Replace window global with React Context after useSocket split (see P3 refactor)
             // Notify ThreatDashboard if it's open
-            if ((window as any).__threatDashboardAddFinding) {
-                (window as any).__threatDashboardAddFinding(event.finding);
+            const addFinding = (window as unknown as Record<string, Function>).__threatDashboardAddFinding;
+            if (typeof addFinding === 'function') {
+                addFinding(event.finding);
             }
         });
 
