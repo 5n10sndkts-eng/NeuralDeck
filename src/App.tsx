@@ -506,7 +506,10 @@ const AppContent: React.FC = () => {
     const shouldSkipImportPath = (relativePath: string): boolean => {
         const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
         const parts = normalized.split('/').filter(Boolean);
-        const blocked = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'out']);
+        const blocked = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'out', '__pycache__', '.ssh', '.aws']);
+        // Block sensitive dotfiles by name (not path segments)
+        const fileName = parts[parts.length - 1] || '';
+        if (/^\.env(\..*)?$/.test(fileName)) return true;
         return parts.some((part) => blocked.has(part));
     };
 
@@ -578,7 +581,7 @@ const AppContent: React.FC = () => {
                 }
             } catch (e: any) {
                 failed++;
-                console.error('[IMPORT] Failed:', relPath, e);
+                logger.error('[IMPORT] Failed:', relPath, e);
             }
         }
 

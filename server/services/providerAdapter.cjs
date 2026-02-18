@@ -11,12 +11,13 @@
  * routing different agents to their optimal models.
  */
 
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const openCodeService = require('./opencodeCLI.cjs');
 const openCodeAdapter = require('./openCodeAdapter.cjs');
 
@@ -136,16 +137,9 @@ class ProviderAdapter {
 
     // 2. Fallback to CLI
     try {
-      // Escape quotes in prompt
-      const escapedPrompt = prompt.replace(/"/g, '\\"');
-
-      // Note: This assumes claude CLI is installed
-      // User may need to install it separately
-      const command = `echo "${escapedPrompt}" | claude chat`; // Trying legacy piping
-      // For Claude Code (new CLI), simpler invocation might be needed, but it's often interactive.
-      // If this hangs, the timeout will catch it.
-
-      const { stdout, stderr } = await execAsync(command, {
+      // Use execFile with argument array to prevent shell injection.
+      // claude CLI accepts prompt via -p flag (non-interactive).
+      const { stdout, stderr } = await execFileAsync('claude', ['-p', prompt], {
         ...execOptions,
         timeout
       });
@@ -183,8 +177,6 @@ class ProviderAdapter {
   async callGemini(prompt, model = 'flash', options = {}) {
     const timeout = options.timeout || 60000;
     try {
-      const escapedPrompt = prompt.replace(/"/g, '\\"');
-
       // Map model names to Gemini API model IDs
       const modelMap = {
         'pro': 'gemini-2.0-pro',
@@ -193,11 +185,11 @@ class ProviderAdapter {
 
       const modelId = modelMap[model] || modelMap.flash;
 
-      const command = `gemini generate --model ${modelId} "${escapedPrompt}"`;
+      // Use execFile with argument array to prevent shell injection
       let stdout, stderr;
 
       try {
-        const result = await execAsync(command, {
+        const result = await execFileAsync('gemini', ['generate', '--model', modelId, prompt], {
           ...execOptions,
           timeout,
           env: {
@@ -212,10 +204,13 @@ class ProviderAdapter {
         if (!process.env.GEMINI_API_KEY) throw cliError;
 
         console.log(`[Gemini] CLI failed, falling back to HTTP API...`);
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
         const fetchRes = await fetch(apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': process.env.GEMINI_API_KEY
+          },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
 
@@ -334,15 +329,13 @@ class ProviderAdapter {
     const timeout = options.timeout;
     const adapters = {
       'aider': async (p) => {
-        const escapedPrompt = p.replace(/"/g, '\\"');
-        const command = `echo "${escapedPrompt}" | aider --no-git --message`;
-        const { stdout } = await execAsync(command, { timeout: timeout || 120000 });
+        // Use execFile to prevent shell injection
+        const { stdout } = await execFileAsync('aider', ['--no-git', '--message', p], { timeout: timeout || 120000 });
         return stdout.trim();
       },
       'code-interpreter': async (p) => {
-        const escapedPrompt = p.replace(/"/g, '\\"');
-        const command = `python -m code_interpreter execute "${escapedPrompt}"`;
-        const { stdout } = await execAsync(command, { timeout: timeout || 60000 });
+        // Use execFile to prevent shell injection
+        const { stdout } = await execFileAsync('python', ['-m', 'code_interpreter', 'execute', p], { timeout: timeout || 60000 });
         return stdout.trim();
       }
     };

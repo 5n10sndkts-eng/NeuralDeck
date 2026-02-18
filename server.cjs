@@ -480,16 +480,18 @@ const safePath = (inputPath, workspaceId = null) => {
         basePath = workspace.path;
     }
 
-    // Prevent traversal
-    const resolved = path.resolve(basePath, inputPath.replace(/^\//, ''));
-    if (!resolved.startsWith(basePath)) {
+    // Strip all leading slashes to prevent absolute path bypass
+    const resolved = path.resolve(basePath, inputPath.replace(/^\/+/, ''));
+    const normalizedBase = path.normalize(basePath);
+    if (!resolved.startsWith(normalizedBase)) {
         throw new Error("Access Denied: Path traversal detected.");
     }
 
     // Prevent accessing NeuralDeck source when workspace is a different directory.
     // Skip this check when basePath IS the NeuralDeck dir (dev mode), otherwise
     // all file operations would be blocked.
-    if (basePath !== NEURALDECK_DIR && (resolved.startsWith(NEURALDECK_DIR) || resolved === NEURALDECK_DIR)) {
+    const normalizedNDDir = path.normalize(NEURALDECK_DIR);
+    if (normalizedBase !== normalizedNDDir && (resolved.startsWith(normalizedNDDir + path.sep) || resolved === normalizedNDDir)) {
         throw new Error("Access Denied: Cannot access NeuralDeck application files.");
     }
 
@@ -1270,10 +1272,27 @@ async function start() {
                 return { ...result, currentPath: homePath };
             }
 
-            // Restrict browsing to safe directories only
-            const resolvedDir = path.resolve(dirPath);
-            const BLOCKED_PREFIXES = ['/etc', '/var', '/usr', '/sys', '/proc', '/dev', '/boot', '/root'];
-            const isBlocked = BLOCKED_PREFIXES.some(prefix => resolvedDir === prefix || resolvedDir.startsWith(prefix + '/'));
+            // Strip null bytes
+            const sanitizedPath = dirPath.replace(/\0/g, '');
+
+            // Resolve and follow symlinks to prevent symlink-based traversal
+            const resolvedDir = path.resolve(sanitizedPath);
+            let realDir;
+            try {
+                realDir = require('fs').realpathSync(resolvedDir);
+            } catch {
+                // Path doesn't exist yet -- use resolved path
+                realDir = resolvedDir;
+            }
+
+            // Block system directories
+            const BLOCKED_PREFIXES = ['/etc', '/var', '/usr', '/sys', '/proc', '/dev', '/boot', '/root',
+                'C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)'];
+            const sep = path.sep;
+            const isBlocked = BLOCKED_PREFIXES.some(prefix => {
+                const normPrefix = path.normalize(prefix);
+                return realDir === normPrefix || realDir.startsWith(normPrefix + sep);
+            });
 
             if (isBlocked) {
                 return reply.code(403).send({ error: 'Access denied: browsing system directories is not allowed.' });
@@ -1283,15 +1302,15 @@ async function start() {
             const homePath = os.homedir();
             const recentWorkspaces = await workspaceService.getRecentWorkspaces();
             const workspacePaths = (recentWorkspaces || []).map(w => w.path).filter(Boolean);
-            const allowedRoots = [homePath, WORKSPACE_PATH, ...workspacePaths];
-            const isAllowed = allowedRoots.some(root => resolvedDir === root || resolvedDir.startsWith(root + '/'));
+            const allowedRoots = [homePath, WORKSPACE_PATH, ...workspacePaths].map(r => path.normalize(r));
+            const isAllowed = allowedRoots.some(root => realDir === root || realDir.startsWith(root + sep));
 
             if (!isAllowed) {
                 return reply.code(403).send({ error: 'Access denied: path is outside allowed directories.' });
             }
 
-            const result = await workspaceService.browseDirectory(dirPath);
-            return { ...result, currentPath: dirPath };
+            const result = await workspaceService.browseDirectory(sanitizedPath);
+            return { ...result, currentPath: sanitizedPath };
         } catch (err) {
             fastify.log.error(`[WORKSPACE] Error browsing directory: ${err.message}`);
             reply.code(400).send({ error: err.message });
@@ -2797,8 +2816,14 @@ async function start() {
             // Cleanup image if requested and build succeeded
             if (cleanup && buildSuccess) {
                 try {
-                    const cleanupProc = spawn('docker', ['rmi', imageTag], { shell: false, timeout: 30000 });
+                    const cleanupProc = spawn('docker', ['rmi', imageTag], { shell: false });
+                    // spawn() does not support timeout option -- implement manually
+                    const cleanupTimeout = setTimeout(() => {
+                        cleanupProc.kill('SIGTERM');
+                        fastify.log.warn(`[DOCKER] Cleanup timed out after 30s for image: ${imageTag}`);
+                    }, 30000);
                     cleanupProc.on('close', (code) => {
+                        clearTimeout(cleanupTimeout);
                         if (code !== 0) {
                             fastify.log.warn(`[DOCKER] Cleanup exited with code ${code} for image: ${imageTag}`);
                         } else {
@@ -2806,6 +2831,7 @@ async function start() {
                         }
                     });
                     cleanupProc.on('error', (err) => {
+                        clearTimeout(cleanupTimeout);
                         fastify.log.warn(`[DOCKER] Cleanup warning: ${err.message}`);
                     });
                 } catch (cleanupError) {
