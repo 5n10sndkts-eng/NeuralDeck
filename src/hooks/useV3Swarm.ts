@@ -87,41 +87,46 @@ export const useV3Swarm = () => {
 
     // Initialize service
     const initService = async () => {
-      if (!serviceRef.current) {
-        const { getSwarmIntegrationService } = await import('../services/swarmIntegration');
-        serviceRef.current = getSwarmIntegrationService({
-          enableRealtimeUpdates: true,
-          enableLegacyIntegration: true,
-          enableEfficiencyMonitoring: true,
-        });
-        
-        await serviceRef.current.initialize(socket);
+      try {
+        if (!serviceRef.current) {
+          const { getSwarmIntegrationService } = await import('../services/swarmIntegration');
+          serviceRef.current = getSwarmIntegrationService({
+            enableRealtimeUpdates: true,
+            enableLegacyIntegration: true,
+            enableEfficiencyMonitoring: true,
+          });
 
-        // Subscribe to updates
-        unsubscribeRef.current = serviceRef.current.subscribeToUpdates((update: SwarmStatusUpdate) => {
-          setV3State(prev => ({
-            isRunning: update.phaseStatus === 'active',
-            currentPhase: update.activePhase,
-            phaseName: getPhaseName(update.activePhase),
-            metrics: {
-              activeAgents: update.metrics.activeAgents,
-              idleAgents: update.metrics.idleAgents,
-              completedAgents: update.metrics.completedAgents,
-              failedAgents: update.metrics.failedAgents,
-              efficiency: update.metrics.efficiency,
-            },
-            nodes: update.agentUpdates.map(au => ({
-              id: `agent-${au.agentId}`,
-              agentId: au.agentId,
-              agentName: getAgentName(au.agentId),
-              domain: getAgentDomain(au.agentId),
-              status: mapAgentStatus(au.status),
-              progress: au.progress,
-              currentTask: au.currentTask?.description,
-              timestamp: update.timestamp,
-            })),
-          }));
-        });
+          await serviceRef.current.initialize(socket);
+
+          // Subscribe to updates
+          unsubscribeRef.current = serviceRef.current.subscribeToUpdates((update: SwarmStatusUpdate) => {
+            setV3State(prev => ({
+              isRunning: update.phaseStatus === 'active',
+              currentPhase: update.activePhase,
+              phaseName: getPhaseName(update.activePhase),
+              metrics: {
+                activeAgents: update.metrics.activeAgents,
+                idleAgents: update.metrics.idleAgents,
+                completedAgents: update.metrics.completedAgents,
+                failedAgents: update.metrics.failedAgents,
+                efficiency: update.metrics.efficiency,
+              },
+              nodes: update.agentUpdates.map(au => ({
+                id: `agent-${au.agentId}`,
+                agentId: au.agentId,
+                agentName: getAgentName(au.agentId),
+                domain: getAgentDomain(au.agentId),
+                status: mapAgentStatus(au.status),
+                progress: au.progress,
+                currentTask: au.currentTask?.description,
+                timestamp: update.timestamp,
+              })),
+            }));
+          });
+        }
+      } catch {
+        // Initialization failed - service remains null, actions will gracefully degrade
+        serviceRef.current = null;
       }
     };
 

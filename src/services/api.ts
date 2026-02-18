@@ -1,15 +1,14 @@
-
 import { ChatMessage, FileNode, LlmConfig } from '../types';
 import { authFetch } from './auth';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001/api';
 
 // Helper to make requests with auth
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   return authFetch(url, options);
 }
 
-async function safeReadJson(res: Response): Promise<any> {
+async function safeReadJson(res: Response): Promise<unknown> {
   const text = await res.text();
   if (!text) return {};
   try {
@@ -19,16 +18,20 @@ async function safeReadJson(res: Response): Promise<any> {
   }
 }
 
-function extractAssistantContent(data: any): string | null {
-  const maybe = data?.choices?.[0]?.message?.content
-    ?? data?.choices?.[0]?.delta?.content
-    ?? data?.choices?.[0]?.text
-    ?? data?.content
-    ?? data?.message
-    ?? data?.result;
+function extractAssistantContent(data: unknown): string | null {
+  if (data == null || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  const choices = d.choices as Array<Record<string, unknown>> | undefined;
+  const first = choices?.[0] as Record<string, unknown> | undefined;
+  const msg = first?.message ?? first?.delta ?? first;
+  const content = (msg as Record<string, unknown>)?.content
+    ?? (msg as Record<string, unknown>)?.text
+    ?? d.content
+    ?? d.message
+    ?? d.result;
 
-  if (typeof maybe !== 'string') return null;
-  const trimmed = maybe.trim();
+  if (typeof content !== 'string') return null;
+  const trimmed = content.trim();
   return trimmed ? trimmed : null;
 }
 
@@ -40,7 +43,7 @@ export const getMCPTools = async () => {
   } catch { return { tools: [] }; }
 };
 
-export const callMCPTool = async (tool: string, args: any) => {
+export const callMCPTool = async (tool: string, args: Record<string, unknown> = {}) => {
   try {
     const res = await apiFetch(`${API_BASE}/mcp/call`, {
       method: 'POST',
@@ -48,7 +51,7 @@ export const callMCPTool = async (tool: string, args: any) => {
       body: JSON.stringify({ tool, args }),
     });
     return await res.json();
-  } catch (e: any) { return { error: e.message }; }
+  } catch (e: unknown) { return { error: e instanceof Error ? e.message : String(e) }; }
 };
 
 export const ingestContext = async (content: string) => {
@@ -67,7 +70,7 @@ export const getKeyStatus = async () => {
 };
 
 // --- RAG METHODS ---
-export const ingestContextFile = async (content: string, metadata: any) => {
+export const ingestContextFile = async (content: string, metadata: Record<string, unknown>) => {
   try {
     const res = await apiFetch(`${API_BASE}/rag/ingest`, {
       method: 'POST',
@@ -87,7 +90,7 @@ export const queryContext = async (query: string): Promise<string> => {
     });
     const data = await res.json();
     if (data.results && Array.isArray(data.results)) {
-      return data.results.map((r: any) => `[SOURCE: ${r.source}]\n${r.content}`).join('\n\n');
+      return (data.results as Array<{ source: string; content: string }>).map((r) => `[SOURCE: ${r.source}]\n${r.content}`).join('\n\n');
     }
     return "";
   } catch { return ""; }
@@ -96,13 +99,23 @@ export const queryContext = async (query: string): Promise<string> => {
 // --- LEGACY / UI SUPPORT ---
 export const fetchFiles = async (workspaceId?: string): Promise<FileNode[]> => {
   try {
-    const url = workspaceId 
+    const url = workspaceId
       ? `${API_BASE}/files?workspaceId=${encodeURIComponent(workspaceId)}`
       : `${API_BASE}/files`;
     const res = await apiFetch(url);
-    if (!res.ok) throw new Error('Failed to fetch files');
-    return res.json();
-  } catch (error) {
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      console.error(`[API] fetchFiles failed: HTTP ${res.status} - ${errorText.slice(0, 200)}`);
+      throw new Error(`Failed to fetch files: ${res.status}`);
+    }
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      console.error('[API] fetchFiles: response is not an array:', typeof data);
+      return [];
+    }
+    return data;
+  } catch (error: unknown) {
+    console.error('[API] fetchFiles error:', error instanceof Error ? error.message : error);
     return [];
   }
 };
@@ -127,8 +140,8 @@ export const writeFile = async (filePath: string, content: string, workspaceId?:
   });
 
   if (!res.ok) {
-    const data = await safeReadJson(res);
-    throw new Error(data?.error || 'Failed to write file');
+    const data = (await safeReadJson(res)) as Record<string, unknown>;
+    throw new Error((data?.error as string) || 'Failed to write file');
   }
 };
 
@@ -158,8 +171,8 @@ export const writeFileWithOptions = async (
   });
 
   if (!res.ok) {
-    const data = await safeReadJson(res);
-    throw new Error(data?.error || 'Failed to write file');
+    const data = (await safeReadJson(res)) as Record<string, unknown>;
+    throw new Error((data?.error as string) || 'Failed to write file');
   }
 };
 
@@ -173,14 +186,14 @@ export const sendChat = async (messages: ChatMessage[], config?: LlmConfig): Pro
         config: config || { provider: 'openai', model: 'openai/gpt-oss-20b', baseUrl: 'http://localhost:8000' }
       }),
     });
-    const data = await safeReadJson(res);
+    const data = (await safeReadJson(res)) as Record<string, unknown>;
 
     if (!res.ok) {
       const errorMsg =
-        (typeof data?.error === 'string' && data.error.trim())
-          ? data.error
-          : (typeof data?.message === 'string' && data.message.trim())
-            ? data.message
+        (typeof data?.error === 'string' && (data.error as string).trim())
+          ? (data.error as string)
+          : (typeof data?.message === 'string' && (data.message as string).trim())
+            ? (data.message as string)
             : `Request failed (${res.status})`;
       return { role: 'assistant', content: `SYSTEM ALERT: ${errorMsg}`, timestamp: Date.now() };
     }
@@ -551,10 +564,10 @@ export const validateWorkspacePath = async (path: string): Promise<ValidationRes
 
 // Browse directory for folder picker
 export const browsePath = async (path?: string): Promise<BrowseResult> => {
-  const url = path 
+  const url = path
     ? `${API_BASE}/browse?path=${encodeURIComponent(path)}`
     : `${API_BASE}/browse`;
-  
+
   const res = await apiFetch(url);
 
   if (!res.ok) {
@@ -627,7 +640,7 @@ export const getOpenCodeHealth = async (): Promise<OpenCodeHealth> => {
   return res.json();
 };
 
-export const getOpenCodeAgents = async (): Promise<any> => {
+export const getOpenCodeAgents = async (): Promise<{ mappings?: Record<string, { routing?: string }> }> => {
   const res = await apiFetch(`${API_BASE}/opencode/agents`);
   if (!res.ok) {
     const error = await res.json();
@@ -636,7 +649,7 @@ export const getOpenCodeAgents = async (): Promise<any> => {
   return res.json();
 };
 
-export const getOpenCodeSessions = async (): Promise<any> => {
+export const getOpenCodeSessions = async (): Promise<{ sessions?: unknown[] }> => {
   const res = await apiFetch(`${API_BASE}/opencode/sessions`);
   if (!res.ok) {
     const error = await res.json();
@@ -683,7 +696,7 @@ export const sendOpenCodeSwarm = async (
   return res.json();
 };
 
-export const cacheOpenCodeSession = async (agentId: string, sessionId: string): Promise<any> => {
+export const cacheOpenCodeSession = async (agentId: string, sessionId: string): Promise<Record<string, unknown>> => {
   const res = await apiFetch(`${API_BASE}/opencode/cache-session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

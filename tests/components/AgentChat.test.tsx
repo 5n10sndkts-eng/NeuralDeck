@@ -48,7 +48,11 @@ describe('AgentChat', () => {
     fireEvent.click(sendButton);
 
     await waitFor(() => {
-      expect(sendOpenCodePrompt).toHaveBeenCalledWith('architect', 'Design the system.', { timeout: 120000 });
+      expect(sendOpenCodePrompt).toHaveBeenCalledWith(
+        'architect',
+        expect.stringContaining('Design the system.'),
+        { timeout: 30000 }
+      );
       expect(screen.getByText('Architect response')).toBeInTheDocument();
     });
   });

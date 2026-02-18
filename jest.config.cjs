@@ -28,20 +28,14 @@ module.exports = {
     }
   },
   moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy'
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testTimeout: 120000,
-  // ts-jest v29+ configuration for JSX
+  // Custom transform: replaces import.meta.env → process.env before ts-jest compiles
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: {
-        jsx: 'react-jsx',
-        esModuleInterop: true,
-        allowSyntheticDefaultImports: true,
-        moduleResolution: 'node'
-      }
-    }],
+    '^.+\\.tsx?$': '<rootDir>/tests/transforms/vite-env.cjs',
     '^.+\\.js$': 'babel-jest'
   },
   // Allow CommonJS modules for server-side tests

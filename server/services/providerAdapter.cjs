@@ -20,6 +20,20 @@ const execAsync = promisify(exec);
 const openCodeService = require('./opencodeCLI.cjs');
 const openCodeAdapter = require('./openCodeAdapter.cjs');
 
+// Ensure we can find CLIs in standard locations (Homebrew, etc.)
+const USER_HOME = process.env.HOME || process.env.USERPROFILE || '';
+const EXTENDED_PATH = [
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  path.join(USER_HOME, '.local/bin'),
+  process.env.PATH
+].filter(Boolean).join(':');
+
+const execOptions = {
+  env: { ...process.env, PATH: EXTENDED_PATH },
+  maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+};
+
 class ProviderAdapter {
   constructor() {
     this.configPath = path.join(process.cwd(), 'opencode.jsonc');
@@ -35,7 +49,7 @@ class ProviderAdapter {
    */
   async loadConfig() {
     if (this.config) return this.config;
-    
+
     try {
       const content = await fs.readFile(this.configPath, 'utf-8');
       // Remove comments from JSONC
@@ -78,36 +92,84 @@ class ProviderAdapter {
    */
   async callClaude(prompt, model = 'sonnet', options = {}) {
     const timeout = options.timeout || 60000;
+
+    // 1. Try HTTP API if Key exists
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        const modelMap = {
+          'sonnet': 'claude-3-sonnet-20240229',
+          'opus': 'claude-3-opus-20240229',
+          'haiku': 'claude-3-haiku-20240307'
+        };
+        const targetModel = modelMap[model] || model;
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: targetModel,
+            max_tokens: 4096,
+            messages: [{ role: 'user', content: prompt }]
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Anthropic API Error ${response.status}: ${errText}`);
+        }
+
+        const data = await response.json();
+        return {
+          provider: 'claude',
+          model,
+          response: data.content?.[0]?.text || '',
+          success: true
+        };
+      } catch (apiError) {
+        console.warn(`[Claude] API failed, trying CLI: ${apiError.message}`);
+      }
+    }
+
+    // 2. Fallback to CLI
     try {
       // Escape quotes in prompt
       const escapedPrompt = prompt.replace(/"/g, '\\"');
-      
+
       // Note: This assumes claude CLI is installed
       // User may need to install it separately
-      const command = `echo "${escapedPrompt}" | claude chat`;
+      const command = `echo "${escapedPrompt}" | claude chat`; // Trying legacy piping
+      // For Claude Code (new CLI), simpler invocation might be needed, but it's often interactive.
+      // If this hangs, the timeout will catch it.
+
       const { stdout, stderr } = await execAsync(command, {
-        timeout,
-        maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+        ...execOptions,
+        timeout
       });
-      
+
       if (stderr && !stdout) {
         throw new Error(`Claude error: ${stderr}`);
       }
-      
-      return { 
-        provider: 'claude', 
-        model, 
+
+      return {
+        provider: 'claude',
+        model,
         response: stdout.trim(),
         success: true
       };
     } catch (error) {
       console.error('Claude CLI error:', error.message);
-      return { 
-        provider: 'claude', 
-        model, 
+      const isInteractive = error.message.includes('interactive') || error.code === 'ETIMEDOUT';
+
+      return {
+        provider: 'claude',
+        model,
         error: error.message,
         success: false,
-        fallback: 'Consider using OpenCode session instead'
+        fallback: 'Set ANTHROPIC_API_KEY in .env or configure a valid CLI.'
       };
     }
   }
@@ -122,41 +184,67 @@ class ProviderAdapter {
     const timeout = options.timeout || 60000;
     try {
       const escapedPrompt = prompt.replace(/"/g, '\\"');
-      
+
       // Map model names to Gemini API model IDs
       const modelMap = {
         'pro': 'gemini-2.0-pro',
         'flash': 'gemini-2.0-flash-exp'
       };
-      
+
       const modelId = modelMap[model] || modelMap.flash;
-      
-      // Note: This assumes gemini CLI is installed
+
       const command = `gemini generate --model ${modelId} "${escapedPrompt}"`;
-      const { stdout, stderr } = await execAsync(command, {
-        timeout,
-        maxBuffer: 10 * 1024 * 1024,
-        env: { 
-          ...process.env, 
-          GEMINI_API_KEY: process.env.GEMINI_API_KEY 
-        }
-      });
-      
+      let stdout, stderr;
+
+      try {
+        const result = await execAsync(command, {
+          ...execOptions,
+          timeout,
+          env: {
+            ...execOptions.env,
+            GEMINI_API_KEY: process.env.GEMINI_API_KEY
+          }
+        });
+        stdout = result.stdout;
+        stderr = result.stderr;
+      } catch (cliError) {
+        // Fallback to HTTP API if CLI fails or is missing
+        if (!process.env.GEMINI_API_KEY) throw cliError;
+
+        console.log(`[Gemini] CLI failed, falling back to HTTP API...`);
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        const fetchRes = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+
+        if (!fetchRes.ok) throw new Error(`HTTP API Error: ${fetchRes.status} ${fetchRes.statusText}`);
+        const data = await fetchRes.json();
+
+        return {
+          provider: 'gemini',
+          model: modelId,
+          response: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+          success: true
+        };
+      }
+
       if (stderr && !stdout) {
         throw new Error(`Gemini error: ${stderr}`);
       }
-      
-      return { 
-        provider: 'gemini', 
-        model: modelId, 
+
+      return {
+        provider: 'gemini',
+        model: modelId,
         response: stdout.trim(),
         success: true
       };
     } catch (error) {
       console.error('Gemini CLI error:', error.message);
-      return { 
-        provider: 'gemini', 
-        model, 
+      return {
+        provider: 'gemini',
+        model,
         error: error.message,
         success: false,
         fallback: 'Check GEMINI_API_KEY or use OpenCode session'
@@ -177,7 +265,7 @@ class ProviderAdapter {
       const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeout);
-      
+
       const response = await fetch(`${ollamaUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -188,7 +276,7 @@ class ProviderAdapter {
         }),
         signal: controller.signal
       }).finally(() => clearTimeout(timer));
-      
+
       if (!response.ok) {
         // If the configured model is missing, retry once with the first installed Ollama model.
         if (allowModelRetry && response.status === 404) {
@@ -215,20 +303,20 @@ class ProviderAdapter {
         }
         throw new Error(`Ollama HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
-      return { 
-        provider: 'ollama', 
-        model, 
+
+      return {
+        provider: 'ollama',
+        model,
         response: data.choices?.[0]?.message?.content || '',
         success: true
       };
     } catch (error) {
       console.error('Ollama error:', error.message);
-      return { 
-        provider: 'ollama', 
-        model, 
+      return {
+        provider: 'ollama',
+        model,
         error: error.message,
         success: false,
         fallback: 'Check if Ollama is running: ollama serve'
@@ -258,26 +346,26 @@ class ProviderAdapter {
         return stdout.trim();
       }
     };
-    
+
     try {
       const adapter = adapters[agentType];
       if (!adapter) {
         throw new Error(`Unknown terminal agent: ${agentType}`);
       }
-      
+
       const response = await adapter(prompt);
-      
-      return { 
-        provider: 'terminal-agent', 
-        agentType, 
+
+      return {
+        provider: 'terminal-agent',
+        agentType,
         response,
         success: true
       };
     } catch (error) {
       console.error(`Terminal agent error (${agentType}):`, error.message);
-      return { 
-        provider: 'terminal-agent', 
-        agentType, 
+      return {
+        provider: 'terminal-agent',
+        agentType,
         error: error.message,
         success: false,
         fallback: `Check if ${agentType} is installed`
@@ -294,12 +382,12 @@ class ProviderAdapter {
   async routePrompt(prompt, agent, options = {}) {
     const config = await this.loadConfig();
     const agentConfig = this.getAgentConfig(agent, config);
-    
+
     const provider = agentConfig.provider || 'claude';
     const model = agentConfig.model || 'sonnet';
-    
+
     console.log(`Routing ${agent} to ${provider}/${model}`);
-    
+
     switch (provider) {
       case 'claude':
         return await this.callClaude(prompt, model, options);
@@ -436,12 +524,12 @@ class ProviderAdapter {
             error: error.message,
             provider: 'opencode'
           };
-      }
+        }
 
         const fallbackResponse = await this.routePrompt(prompt, agentId, { timeout: localTimeout });
-      const fallbackContent = String(fallbackResponse?.response || '').trim();
-      const fallbackSuccess = !!fallbackResponse?.success && fallbackContent.length > 0;
-      return {
+        const fallbackContent = String(fallbackResponse?.response || '').trim();
+        const fallbackSuccess = !!fallbackResponse?.success && fallbackContent.length > 0;
+        return {
           success: fallbackSuccess,
           routing: fallbackResponse?.provider || 'local',
           fallbackUsed: true,
@@ -577,10 +665,10 @@ class ProviderAdapter {
       responses: normalizedResponses,
       consensus: consensus
         ? {
-            content: consensus.sample,
-            count: consensus.count,
-            agents: consensus.agents
-          }
+          content: consensus.sample,
+          count: consensus.count,
+          agents: consensus.agents
+        }
         : null
     };
   }
@@ -595,10 +683,10 @@ class ProviderAdapter {
     if (!config) {
       config = this.getDefaultConfig();
     }
-    
-    return config.agent?.[agent] || { 
-      provider: 'claude', 
-      model: 'sonnet' 
+
+    return config.agent?.[agent] || {
+      provider: 'claude',
+      model: 'sonnet'
     };
   }
 
@@ -608,28 +696,28 @@ class ProviderAdapter {
    */
   async testProviders() {
     const results = {};
-    
+
     // Test Claude
     const claudeResult = await this.callClaude('Say "OK" if you can hear me', 'sonnet');
     results.claude = {
       available: claudeResult.success,
       error: claudeResult.error
     };
-    
+
     // Test Gemini
     const geminiResult = await this.callGemini('Say "OK" if you can hear me', 'flash');
     results.gemini = {
       available: geminiResult.success,
       error: geminiResult.error
     };
-    
+
     // Test Ollama
     const ollamaResult = await this.callOllama('Say "OK" if you can hear me', 'deepseek-coder:33b');
     results.ollama = {
       available: ollamaResult.success,
       error: ollamaResult.error
     };
-    
+
     return results;
   }
 }

@@ -25,10 +25,11 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({ initialPath, onSel
       setIsLoading(true);
       setError(null);
       const data = await browsePath(path);
+      console.log('[FolderBrowser] Loaded directory:', data);
       setBrowseData(data);
       setCurrentPath(data.currentPath);
       setManualPath(data.currentPath);
-      
+
       // Validate the current path
       const validationResult = await validateWorkspacePath(data.currentPath);
       setValidation(validationResult);
@@ -73,6 +74,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({ initialPath, onSel
 
   // Load initial directory on mount
   useEffect(() => {
+    console.log('[FolderBrowser] Mounting with initialPath:', initialPath);
     loadDirectory(initialPath);
   }, []);
 
@@ -83,8 +85,8 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({ initialPath, onSel
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', zIndex: 10000 }} // Force z-index
       onClick={onCancel}
     >
       <MotionDiv
@@ -165,7 +167,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({ initialPath, onSel
             <Home style={{ width: 14, height: 14 }} />
             Home
           </button>
-          
+
           {browseData?.parent && (
             <button
               onClick={navigateUp}
@@ -246,12 +248,17 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({ initialPath, onSel
                   </span>
                 </>
               ) : (
-                <>
-                  <X style={{ width: 16, height: 16, color: '#ff4466' }} />
-                  <span style={{ color: '#ff4466', fontSize: '12px' }}>
-                    {validation.error}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <X style={{ width: 16, height: 16, color: '#ff4466' }} />
+                    <span style={{ color: '#ff4466', fontSize: '12px', fontWeight: 600 }}>
+                      Cannot select this folder
+                    </span>
+                  </div>
+                  <span style={{ color: '#888', fontSize: '11px', marginLeft: '24px' }}>
+                    {validation.error}. <span style={{ color: '#ddd' }}>Please navigate into a project subfolder.</span>
                   </span>
-                </>
+                </div>
               )}
             </div>
           </div>

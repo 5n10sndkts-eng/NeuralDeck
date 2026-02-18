@@ -30,6 +30,23 @@ const csrf = safeRequire('@fastify/csrf-protection');
 const jwt = safeRequire('jsonwebtoken');
 const crypto = require('crypto');
 
+// --- PRODUCTION SECURITY GATE ---
+// In production, missing security modules are fatal. In dev, warn only.
+if (process.env.NODE_ENV === 'production') {
+    const required = { helmet, cors, rateLimit, csrf, cookie, jwt };
+    const missing = Object.entries(required).filter(([, mod]) => !mod).map(([name]) => name);
+    if (missing.length > 0) {
+        console.error(`[FATAL] Missing security modules in production: ${missing.join(', ')}. Run npm install.`);
+        process.exit(1);
+    }
+} else {
+    const optional = { helmet, cors, rateLimit, csrf, cookie, jwt };
+    const missing = Object.entries(optional).filter(([, mod]) => !mod).map(([name]) => name);
+    if (missing.length > 0) {
+        console.warn(`[DEV WARNING] Missing security modules: ${missing.join(', ')}. Some protections disabled.`);
+    }
+}
+
 // --- SECURITY SERVICES - Story 6-4 ---
 const securityLogger = require('./server/lib/securityLogger.cjs');
 const encryption = require('./server/lib/encryption.cjs');
@@ -65,8 +82,12 @@ const WORKSPACE_PATH = process.cwd();
 const DEFAULT_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
     'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173'
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    'http://127.0.0.1:5175'
 ];
 const CORS_ORIGINS = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
@@ -431,7 +452,7 @@ const validateCommandPaths = (cmd, ip) => {
                 if (!resolved.startsWith(WORKSPACE_PATH)) {
                     return { valid: false, reason: `Path outside workspace: ${candidate}` };
                 }
-                if (resolved.startsWith(NEURALDECK_DIR) || resolved === NEURALDECK_DIR) {
+                if (WORKSPACE_PATH !== NEURALDECK_DIR && (resolved.startsWith(NEURALDECK_DIR) || resolved === NEURALDECK_DIR)) {
                     return { valid: false, reason: `Access denied to app directory: ${candidate}` };
                 }
             } catch (e) {
@@ -445,9 +466,12 @@ const validateCommandPaths = (cmd, ip) => {
 
 // --- UTILS ---
 const safePath = (inputPath, workspaceId = null) => {
+    // Strip null bytes to prevent poison-null-byte attacks
+    inputPath = inputPath.replace(/\0/g, '');
+
     // If workspace ID is provided, resolve relative to that workspace
     let basePath = WORKSPACE_PATH;
-    
+
     if (workspaceId) {
         const workspace = workspaceService.getWorkspaceById(workspaceId);
         if (!workspace) {
@@ -455,18 +479,20 @@ const safePath = (inputPath, workspaceId = null) => {
         }
         basePath = workspace.path;
     }
-    
+
     // Prevent traversal
     const resolved = path.resolve(basePath, inputPath.replace(/^\//, ''));
     if (!resolved.startsWith(basePath)) {
         throw new Error("Access Denied: Path traversal detected.");
     }
-    
-    // Double-check not accessing NeuralDeck source (critical security check)
-    if (resolved.startsWith(NEURALDECK_DIR) || resolved === NEURALDECK_DIR) {
+
+    // Prevent accessing NeuralDeck source when workspace is a different directory.
+    // Skip this check when basePath IS the NeuralDeck dir (dev mode), otherwise
+    // all file operations would be blocked.
+    if (basePath !== NEURALDECK_DIR && (resolved.startsWith(NEURALDECK_DIR) || resolved === NEURALDECK_DIR)) {
         throw new Error("Access Denied: Cannot access NeuralDeck application files.");
     }
-    
+
     return resolved;
 };
 
@@ -1114,7 +1140,7 @@ async function start() {
         try {
             const { workspaceId } = request.query;
             let workspacePath = WORKSPACE_PATH;
-            
+
             // If workspaceId is provided, use that workspace
             if (workspaceId) {
                 const workspace = workspaceService.getWorkspaceById(workspaceId);
@@ -1129,7 +1155,7 @@ async function start() {
                     workspacePath = activeWorkspace.path;
                 }
             }
-            
+
             const files = await getFileStructure(workspacePath);
             return files;
         } catch (e) {
@@ -1156,13 +1182,13 @@ async function start() {
     fastify.post('/api/workspaces', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: workspacePath, name } = request.body;
-            
+
             if (!workspacePath) {
                 return reply.code(400).send({ error: 'Workspace path is required' });
             }
 
             const workspace = await workspaceService.addWorkspace(workspacePath, name);
-            
+
             await securityLogger.logSecurityEvent('workspace-add', {
                 userId: request.user?.userId || 'anonymous',
                 ip: request.ip,
@@ -1181,7 +1207,7 @@ async function start() {
         try {
             const { id } = request.params;
             const workspace = await workspaceService.setActiveWorkspace(id);
-            
+
             await securityLogger.logSecurityEvent('workspace-activate', {
                 userId: request.user?.userId || 'anonymous',
                 ip: request.ip,
@@ -1200,7 +1226,7 @@ async function start() {
         try {
             const { id } = request.params;
             await workspaceService.removeWorkspace(id);
-            
+
             await securityLogger.logSecurityEvent('workspace-remove', {
                 userId: request.user?.userId || 'anonymous',
                 ip: request.ip,
@@ -1218,7 +1244,7 @@ async function start() {
     fastify.post('/api/workspaces/validate', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: workspacePath } = request.body;
-            
+
             if (!workspacePath) {
                 return reply.code(400).send({ error: 'Path is required' });
             }
@@ -1235,13 +1261,33 @@ async function start() {
     fastify.get('/api/browse', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: dirPath } = request.query;
-            
+            const os = require('os');
+
             if (!dirPath) {
                 // Return user's home directory by default
-                const os = require('os');
                 const homePath = os.homedir();
                 const result = await workspaceService.browseDirectory(homePath);
                 return { ...result, currentPath: homePath };
+            }
+
+            // Restrict browsing to safe directories only
+            const resolvedDir = path.resolve(dirPath);
+            const BLOCKED_PREFIXES = ['/etc', '/var', '/usr', '/sys', '/proc', '/dev', '/boot', '/root'];
+            const isBlocked = BLOCKED_PREFIXES.some(prefix => resolvedDir === prefix || resolvedDir.startsWith(prefix + '/'));
+
+            if (isBlocked) {
+                return reply.code(403).send({ error: 'Access denied: browsing system directories is not allowed.' });
+            }
+
+            // Allow: home directory, WORKSPACE_PATH, or any registered workspace path
+            const homePath = os.homedir();
+            const recentWorkspaces = await workspaceService.getRecentWorkspaces();
+            const workspacePaths = (recentWorkspaces || []).map(w => w.path).filter(Boolean);
+            const allowedRoots = [homePath, WORKSPACE_PATH, ...workspacePaths];
+            const isAllowed = allowedRoots.some(root => resolvedDir === root || resolvedDir.startsWith(root + '/'));
+
+            if (!isAllowed) {
+                return reply.code(403).send({ error: 'Access denied: path is outside allowed directories.' });
             }
 
             const result = await workspaceService.browseDirectory(dirPath);
@@ -1284,6 +1330,14 @@ async function start() {
     });
 
     // File System: Read
+    // Handle GET /api/read gracefully - the endpoint is POST-only
+    fastify.get('/api/read', async (request, reply) => {
+        return reply.code(405).send({
+            error: 'Method Not Allowed. Use POST /api/read with { filePath, workspaceId } body.',
+            method: 'POST'
+        });
+    });
+
     fastify.post('/api/read', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { filePath, workspaceId } = request.body;
@@ -1338,13 +1392,17 @@ async function start() {
         try {
             const { filePath, content, agentId, skipCheckpoint, workspaceId, encoding } = request.body;
 
+            if (!filePath || typeof filePath !== 'string') {
+                return reply.code(400).send({ error: 'filePath is required and must be a string' });
+            }
+
             // If workspaceId is omitted, default to the active workspace (if any).
             const activeWorkspace = workspaceId ? null : await workspaceService.getActiveWorkspace();
             const workspaceIdToUse = workspaceId || activeWorkspace?.id || null;
 
             const cleanPath = safePath(filePath, workspaceIdToUse);
             const isBinaryWrite = encoding && encoding !== 'utf-8';
-            
+
             // Determine workspace path for checkpoint service
             let workspacePath = WORKSPACE_PATH;
             if (workspaceIdToUse) {
@@ -1398,7 +1456,14 @@ async function start() {
                 false,
                 e
             );
-            reply.code(500).send({ error: e.message });
+            const msg = e.message || '';
+            if (msg.includes('Access Denied')) {
+                reply.code(403).send({ error: msg });
+            } else if (msg.includes('Invalid workspace')) {
+                reply.code(400).send({ error: msg });
+            } else {
+                reply.code(500).send({ error: msg });
+            }
         }
     });
 
@@ -1426,11 +1491,11 @@ async function start() {
     fastify.post('/api/files/create', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: itemPath, type, workspaceId } = request.body;
-            
+
             if (!itemPath) {
                 return reply.code(400).send({ error: 'Path is required' });
             }
-            
+
             if (!type || !['file', 'directory'].includes(type)) {
                 return reply.code(400).send({ error: 'Type must be "file" or "directory"' });
             }
@@ -1469,7 +1534,7 @@ async function start() {
     fastify.post('/api/files/rename', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { oldPath, newPath, workspaceId } = request.body;
-            
+
             if (!oldPath || !newPath) {
                 return reply.code(400).send({ error: 'Both oldPath and newPath are required' });
             }
@@ -1512,7 +1577,7 @@ async function start() {
     fastify.delete('/api/files', { preHandler: verifyToken }, async (request, reply) => {
         try {
             const { path: itemPath, workspaceId } = request.body;
-            
+
             if (!itemPath) {
                 return reply.code(400).send({ error: 'Path is required' });
             }
@@ -2445,7 +2510,7 @@ async function start() {
 
         try {
             fastify.log.info(`[MCP] Executing tool: ${tool} from ${clientIp}`);
-            
+
             const result = await mcpAdapter.executeTool(tool, args, {
                 clientIp,
                 fastify
@@ -2732,13 +2797,16 @@ async function start() {
             // Cleanup image if requested and build succeeded
             if (cleanup && buildSuccess) {
                 try {
-                    const cleanupCommand = `docker rmi ${imageTag}`;
-                    exec(cleanupCommand, EXEC_OPTIONS, (error) => {
-                        if (error) {
-                            fastify.log.warn(`[DOCKER] Cleanup warning: ${error.message}`);
+                    const cleanupProc = spawn('docker', ['rmi', imageTag], { shell: false, timeout: 30000 });
+                    cleanupProc.on('close', (code) => {
+                        if (code !== 0) {
+                            fastify.log.warn(`[DOCKER] Cleanup exited with code ${code} for image: ${imageTag}`);
                         } else {
                             fastify.log.info(`[DOCKER] Cleaned up image: ${imageTag}`);
                         }
+                    });
+                    cleanupProc.on('error', (err) => {
+                        fastify.log.warn(`[DOCKER] Cleanup warning: ${err.message}`);
                     });
                 } catch (cleanupError) {
                     fastify.log.warn(`[DOCKER] Cleanup error (non-fatal): ${cleanupError.message}`);
@@ -2770,9 +2838,15 @@ async function start() {
     try {
         const fileWatcher = initFileWatcher(fastify.log);
 
-        // Subscribe to file changes and log them
+        // Subscribe to file changes and broadcast to frontend via Socket.IO
         fileWatcher.subscribe((event) => {
             fastify.log.info(`[FILE_CHANGE] ${event.eventType}: ${event.relativePath}`);
+            broadcast('file:changed', {
+                filePath: event.filePath,
+                relativePath: event.relativePath,
+                eventType: event.eventType,
+                timestamp: event.timestamp
+            });
         });
 
         fastify.log.info('[STARTUP] File watcher service initialized');

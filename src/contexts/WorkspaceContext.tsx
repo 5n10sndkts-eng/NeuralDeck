@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { logger } from '@/services/logger';
 import {
   getWorkspaces,
   addWorkspace as apiAddWorkspace,
@@ -52,25 +53,35 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<FileNode[]>([]);
 
-  // Load workspaces on mount
-  const refreshWorkspaces = useCallback(async () => {
+  // Load workspaces on mount - with retry for auth timing
+  const refreshWorkspaces = useCallback(async (retryCount?: number) => {
+    const attempt = retryCount ?? 0;
     try {
       setIsLoading(true);
       setError(null);
       const { workspaces, active } = await getWorkspaces();
       setRecentWorkspaces(workspaces);
       setCurrentWorkspace(active);
-      
+
       // If there's an active workspace, load its files
       if (active) {
         const workspaceFiles = await fetchFiles(active.id);
         setFiles(workspaceFiles);
+        if (workspaceFiles.length === 0) {
+          logger.warn('[WORKSPACE] Active workspace returned 0 files - directory may be empty or inaccessible');
+        }
       } else {
         setFiles([]);
       }
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to load workspaces:', err);
-      setError(err.message);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to load workspaces:', err);
+      // Retry once after a short delay (auth may not be ready on mount)
+      if (attempt < 2) {
+        logger.info(`[WORKSPACE] Retrying workspace load (attempt ${attempt + 1})...`);
+        setTimeout(() => refreshWorkspaces(attempt + 1), 1000);
+        return;
+      }
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
@@ -86,9 +97,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const workspaceFiles = await fetchFiles(currentWorkspace.id);
       setFiles(workspaceFiles);
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to refresh files:', err);
-      setError(err.message);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to refresh files:', err);
+      setError(err instanceof Error ? err.message : String(err));
     }
   }, [currentWorkspace]);
 
@@ -107,9 +118,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Refresh workspaces list to update lastOpened times
       const { workspaces } = await getWorkspaces();
       setRecentWorkspaces(workspaces);
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to open workspace:', err);
-      setError(err.message);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to open workspace:', err);
+      setError(err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       setIsLoading(false);
@@ -129,9 +140,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       // Optionally activate the newly added workspace
       await openWorkspace(workspace.id);
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to add workspace:', err);
-      setError(err.message);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to add workspace:', err);
+      setError(err instanceof Error ? err.message : String(err));
       throw err;
     } finally {
       setIsLoading(false);
@@ -153,9 +164,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Refresh workspaces list
       const { workspaces } = await getWorkspaces();
       setRecentWorkspaces(workspaces);
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to remove workspace:', err);
-      setError(err.message);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to remove workspace:', err);
+      setError(err instanceof Error ? err.message : String(err));
       throw err;
     }
   }, [currentWorkspace]);
@@ -169,8 +180,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       await apiCreateFile(path, currentWorkspace.id);
       await refreshFiles();
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to create file:', err);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to create file:', err);
       throw err;
     }
   }, [currentWorkspace, refreshFiles]);
@@ -183,8 +194,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       await apiCreateFolder(path, currentWorkspace.id);
       await refreshFiles();
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to create folder:', err);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to create folder:', err);
       throw err;
     }
   }, [currentWorkspace, refreshFiles]);
@@ -197,8 +208,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       await apiRenameItem(oldPath, newPath, currentWorkspace.id);
       await refreshFiles();
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to rename item:', err);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to rename item:', err);
       throw err;
     }
   }, [currentWorkspace, refreshFiles]);
@@ -211,8 +222,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       await apiDeleteItem(path, currentWorkspace.id);
       await refreshFiles();
-    } catch (err: any) {
-      console.error('[WORKSPACE] Failed to delete item:', err);
+    } catch (err: unknown) {
+      logger.error('[WORKSPACE] Failed to delete item:', err);
       throw err;
     }
   }, [currentWorkspace, refreshFiles]);
@@ -222,7 +233,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     refreshWorkspaces();
   }, [refreshWorkspaces]);
 
-  const value: WorkspaceContextValue = {
+  const value = React.useMemo<WorkspaceContextValue>(() => ({
     currentWorkspace,
     recentWorkspaces,
     isLoading,
@@ -237,7 +248,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     createFolder,
     renameItem,
     deleteItem,
-  };
+  }), [
+    currentWorkspace,
+    recentWorkspaces,
+    isLoading,
+    error,
+    files,
+    openWorkspace,
+    addWorkspace,
+    removeWorkspace,
+    refreshWorkspaces,
+    refreshFiles,
+    createFile,
+    createFolder,
+    renameItem,
+    deleteItem
+  ]);
 
   return (
     <WorkspaceContext.Provider value={value}>

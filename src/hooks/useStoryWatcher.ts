@@ -12,7 +12,7 @@ import { authFetch } from '../services/auth';
 import { logger } from '@/services/logger';
 
 const env = (globalThis as any)?.import?.meta?.env || (typeof process !== 'undefined' ? process.env : {}) || {};
-const API_BASE = env.VITE_API_BASE || 'http://localhost:3001/api';
+const API_BASE = env.VITE_API_BASE || 'http://127.0.0.1:3001/api';
 
 export interface StoryMetadata {
     id: string;           // Unique identifier (e.g., 'story-1-auth')

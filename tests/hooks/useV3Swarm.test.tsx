@@ -13,7 +13,7 @@ jest.mock('../../src/hooks/useSocket');
 jest.mock('../../src/services/swarmIntegration', () => ({
   getSwarmIntegrationService: jest.fn(() => ({
     initialize: jest.fn(),
-    executeSwarm: jest.fn().mockResolvedValue({ success: true }),
+    executeSwarm: jest.fn().mockResolvedValue({ success: true, errors: [] }),
     executeDeveloperSwarm: jest.fn().mockResolvedValue([]),
     getStatus: jest.fn().mockReturnValue({
       isRunning: false,
@@ -93,6 +93,11 @@ describe('useV3Swarm', () => {
   it('[P1] should start V3 swarm', async () => {
     const { result } = renderHook(() => useV3Swarm());
 
+    // Flush async service initialization (dynamic import + initialize)
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     let startResult;
     await act(async () => {
       startResult = await result.current.startV3Swarm();
@@ -110,6 +115,11 @@ describe('useV3Swarm', () => {
     });
 
     const { result } = renderHook(() => useV3Swarm());
+
+    // Flush async service initialization
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     let startResult;
     await act(async () => {
@@ -145,6 +155,11 @@ describe('useV3Swarm', () => {
   it('[P1] should get efficiency metrics', async () => {
     const { result } = renderHook(() => useV3Swarm());
 
+    // Flush async service initialization
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     let metrics;
     await act(async () => {
       metrics = await result.current.getEfficiencyMetrics();
@@ -159,6 +174,12 @@ describe('useV3Swarm', () => {
 
   it('[P1] should execute developer swarm', async () => {
     const { result } = renderHook(() => useV3Swarm());
+
+    // Flush async service initialization
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     const stories = [
       { id: 'story-1', title: 'Test Story 1', taskCount: 3, path: '/test1.md', status: 'pending' as const, acceptanceCriteriaCount: 3, lastModified: Date.now() },
       { id: 'story-2', title: 'Test Story 2', taskCount: 2, path: '/test2.md', status: 'pending' as const, acceptanceCriteriaCount: 2, lastModified: Date.now() },
@@ -237,6 +258,12 @@ describe('useV3Swarm - Developer Swarm', () => {
 
   it('[P1] should track developer swarm execution state', async () => {
     const { result } = renderHook(() => useV3Swarm());
+
+    // Flush async service initialization
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     const stories = [{ id: 'story-1', title: 'Test', taskCount: 1, path: '/test.md', status: 'pending' as const, acceptanceCriteriaCount: 1, lastModified: Date.now() }];
     const llmConfig = { provider: 'anthropic' as any, model: 'claude-3.5-sonnet' };
 
@@ -262,6 +289,12 @@ describe('useV3Swarm - Developer Swarm', () => {
     });
 
     const { result } = renderHook(() => useV3Swarm());
+
+    // Flush async service initialization
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     const stories = [
       { id: 'story-1', title: 'Test 1', taskCount: 1, path: '/test1.md', status: 'pending' as const, acceptanceCriteriaCount: 1, lastModified: Date.now() },
       { id: 'story-2', title: 'Test 2', taskCount: 1, path: '/test2.md', status: 'pending' as const, acceptanceCriteriaCount: 1, lastModified: Date.now() },
@@ -302,13 +335,16 @@ describe('useV3Swarm - Error Handling', () => {
       throw new Error('Service initialization failed');
     });
 
-    // Should not throw, but service should be null
+    // Should not throw - hook catches init errors gracefully
     const { result } = renderHook(() => useV3Swarm());
 
-    // Wait for effect to complete
-    await waitFor(() => {
-      expect(result.current).toBeDefined();
+    // Flush the async init (which will fail and be caught)
+    await act(async () => {
+      await Promise.resolve();
     });
+
+    expect(result.current).toBeDefined();
+    expect(result.current.v3State.isRunning).toBe(false);
   });
 
   it('[P1] should handle missing service in actions', async () => {

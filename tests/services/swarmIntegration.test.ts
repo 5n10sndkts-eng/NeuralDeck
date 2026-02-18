@@ -43,7 +43,7 @@ jest.mock('../../src/core/swarm/swarm-coordinator', () => {
     reset: jest.fn(),
   };
   
-  return jest.fn().mockImplementation(() => ({
+  const MockCoordinator = jest.fn().mockImplementation(() => ({
     registry: mockRegistry,
     getStatus: jest.fn().mockReturnValue({
       isRunning: false,
@@ -76,10 +76,11 @@ jest.mock('../../src/core/swarm/swarm-coordinator', () => {
     }),
     reset: jest.fn(),
   }));
+  return { __esModule: true, default: MockCoordinator, SwarmCoordinator: MockCoordinator };
 });
 
 jest.mock('../../src/core/swarm/agent-registry', () => {
-  return jest.fn().mockImplementation(() => ({
+  const MockRegistry = jest.fn().mockImplementation(() => ({
     getAllAgents: jest.fn().mockReturnValue([]),
     getAgent: jest.fn().mockReturnValue({
       id: 1,
@@ -115,6 +116,7 @@ jest.mock('../../src/core/swarm/agent-registry', () => {
     updateAgentStatus: jest.fn(),
     reset: jest.fn(),
   }));
+  return { __esModule: true, default: MockRegistry, AgentRegistry: MockRegistry };
 });
 
 jest.mock('../../src/core/swarm/communication-bus', () => {
@@ -154,7 +156,7 @@ jest.mock('../../src/core/swarm/load-balancer', () => {
 });
 
 jest.mock('../../src/core/swarm/efficiency-monitor', () => {
-  return jest.fn().mockImplementation(() => ({
+  const MockMonitor = jest.fn().mockImplementation(() => ({
     recordSnapshot: jest.fn(),
     generateReport: jest.fn().mockReturnValue({
       timestamp: Date.now(),
@@ -174,6 +176,7 @@ jest.mock('../../src/core/swarm/efficiency-monitor', () => {
     getBottleneckHistory: jest.fn().mockReturnValue([]),
     reset: jest.fn(),
   }));
+  return { __esModule: true, default: MockMonitor, EfficiencyMonitor: MockMonitor };
 });
 jest.mock('../../src/services/swarmEngine', () => ({
   executeSwarm: jest.fn(),

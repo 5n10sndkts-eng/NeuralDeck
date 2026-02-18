@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { ChatMessage, AgentProfile } from '../types';
-import { Terminal, Volume2, VolumeX, ArrowRight, Activity, AlertTriangle, History, Plus, ArrowDown } from 'lucide-react';
+import { Terminal, Activity, History, Plus, ArrowDown } from 'lucide-react';
 import { SoundEffects } from '../services/sound';
 import { CyberInput } from './CyberUI';
 import { AGENT_DEFINITIONS } from '../services/agent';
@@ -13,18 +13,13 @@ interface Props {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
   isThinking: boolean;
-  godMode?: boolean;
-  isMuted?: boolean;
-  onVoiceStateChange?: (isListening: boolean) => void;
   onTransferCode: (code: string) => void;
-  activePersona?: AgentProfile; // New Prop
+  activePersona?: AgentProfile;
 }
 
 import { VisionDropZone } from './VisionDropZone';
 
-// ... (previous imports)
-
-const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isMuted, onTransferCode, activePersona }) => {
+const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, onTransferCode, activePersona }) => {
   const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -58,17 +53,20 @@ const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isM
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messages.length > lastMessageCountRef.current) {
-      // New message arrived - scroll to bottom
       const scrollElement = scrollContainerRef.current;
       if (scrollElement) {
         const isNearBottom = scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 200;
         if (isNearBottom || lastMessageCountRef.current === 0) {
-          virtualizer.scrollToIndex(allItems.length - 1, { align: 'end', behavior: 'smooth' });
+          // Use native DOM scroll — reliable with dynamic-sized virtualized items
+          // requestAnimationFrame ensures the virtualizer has rendered the new item first
+          requestAnimationFrame(() => {
+            scrollElement.scrollTop = scrollElement.scrollHeight;
+          });
         }
       }
     }
     lastMessageCountRef.current = messages.length;
-  }, [messages.length, allItems.length, virtualizer]);
+  }, [messages.length]);
 
   // Detect if user scrolled up
   useEffect(() => {
@@ -112,7 +110,10 @@ const TheTerminal: React.FC<Props> = ({ messages, onSendMessage, isThinking, isM
   };
 
   const scrollToBottom = () => {
-    virtualizer.scrollToIndex(allItems.length - 1, { align: 'end', behavior: 'smooth' });
+    const scrollElement = scrollContainerRef.current;
+    if (scrollElement) {
+      scrollElement.scrollTo({ top: scrollElement.scrollHeight, behavior: 'smooth' });
+    }
   };
 
   const currentSession = sessions.find(s => s.id === currentSessionId);

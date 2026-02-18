@@ -9,13 +9,19 @@ import DataPacket from '../DataPacket';
 import { usePacketSystem } from '../../hooks/usePacketSystem';
 import { renderHook } from '@testing-library/react';
 
-// Mock Framer Motion to avoid animation timing issues in tests
+// Mock Framer Motion - filter motion props to avoid React DOM warnings
 jest.mock('framer-motion', () => {
-    const actual = jest.requireActual('framer-motion');
-    return {
-        ...actual,
-        motion: {
-            div: ({ children, onAnimationComplete, ...props }: any) => {
+  const actual = jest.requireActual('framer-motion');
+  const MOTION_PROPS = ['layoutId', 'whileHover', 'whileTap', 'initial', 'animate', 'exit', 'transition', 'layout', 'variants'];
+  const filter = (p: any) => {
+    const filtered = { ...p };
+    MOTION_PROPS.forEach((k) => delete filtered[k]);
+    return filtered;
+  };
+  return {
+    ...actual,
+    motion: {
+      div: ({ children, onAnimationComplete, ...props }: any) => {
                 // Simulate animation completion after a short delay
                 React.useEffect(() => {
                     if (onAnimationComplete) {
@@ -23,7 +29,7 @@ jest.mock('framer-motion', () => {
                         return () => clearTimeout(timer);
                     }
                 }, [onAnimationComplete]);
-                return <div data-testid="data-packet" {...props}>{children}</div>;
+                return <div data-testid="data-packet" {...filter(props)}>{children}</div>;
             },
         },
     };

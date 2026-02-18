@@ -9,14 +9,22 @@ jest.mock('../../src/contexts/UIContext', () => ({
     })
 }));
 
-// Mock framer-motion to avoid animation issues in tests
-jest.mock('framer-motion', () => ({
+// Mock framer-motion - filter motion props to avoid React DOM warnings
+jest.mock('framer-motion', () => {
+  const MOTION_PROPS = ['layoutId', 'whileHover', 'whileTap', 'initial', 'animate', 'exit', 'transition', 'layout', 'variants', 'onAnimationStart', 'onAnimationComplete'];
+  const filter = (p: any) => {
+    const filtered = { ...p };
+    MOTION_PROPS.forEach((k) => delete filtered[k]);
+    return filtered;
+  };
+  return {
     motion: {
-        div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-        button: ({ children, ...props }: any) => <button {...props}>{children}</button>
+      div: ({ children, ...props }: any) => <div {...filter(props)}>{children}</div>,
+      button: ({ children, ...props }: any) => <button {...filter(props)}>{children}</button>
     },
     AnimatePresence: ({ children }: any) => <>{children}</>
-}));
+  };
+});
 
 describe('[P0] CyberDock Navigation', () => {
     const mockOnViewChange = jest.fn();

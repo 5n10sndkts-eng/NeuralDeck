@@ -4,6 +4,7 @@ import { Server, Globe, Terminal, Cpu, Check, AlertCircle, Save, Plus, Trash2, P
 import { ConnectionProfile, LlmProvider, AgentProfile } from '../types';
 import { AGENT_DEFINITIONS } from '../services/agent';
 import { sendChat } from '../services/api';
+import { CLI_COMMAND_TEMPLATES, CLI_PROVIDERS } from '../constants';
 
 interface Props {
   profiles: ConnectionProfile[];
@@ -25,6 +26,19 @@ const TheConnections: React.FC<Props> = ({
   const [activeTab, setActiveTab] = useState<'profiles' | 'matrix'>('profiles');
   const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [cliValidationError, setCliValidationError] = useState<string | null>(null);
+
+  const requiresCliCommand = (provider: LlmProvider) => CLI_PROVIDERS.includes(provider);
+
+  const validateCliCommand = (cmd?: string) => {
+      if (!cmd || !cmd.trim()) {
+          return 'Command template is required for CLI providers.';
+      }
+      if (!cmd.includes('{{prompt}}')) {
+          return 'Command template must include the {{prompt}} placeholder.';
+      }
+      return null;
+  };
 
   // --- PROFILE MANAGEMENT ---
   const handleAddProfile = () => {
@@ -36,10 +50,20 @@ const TheConnections: React.FC<Props> = ({
           baseUrl: 'http://localhost:8000/v1'
       };
       setEditingProfile(newProfile);
+      setCliValidationError(null);
   };
 
   const handleSaveProfile = () => {
       if (!editingProfile) return;
+      if (requiresCliCommand(editingProfile.provider)) {
+          const error = validateCliCommand(editingProfile.cliCommand);
+          if (error) {
+              setCliValidationError(error);
+              return;
+          }
+      } else {
+          setCliValidationError(null);
+      }
       const exists = profiles.find(p => p.id === editingProfile.id);
       if (exists) {
           onUpdateProfiles(profiles.map(p => p.id === editingProfile.id ? editingProfile : p));
@@ -115,23 +139,15 @@ const TheConnections: React.FC<Props> = ({
                               if (provider === 'lmstudio') {
                                   updates.baseUrl = 'http://localhost:1234/v1';
                               }
-                              // Auto-populate CLI command defaults when switching to CLI providers
-                              const cliDefaults: Record<string, string> = {
-                                  'cli': 'ollama run llama3 "{{prompt}}"',
-                                  'claude-cli': 'claude -p "{{prompt}}"',
-                                  'gemini-cli': 'gemini "{{prompt}}"',
-                                  'codex-cli': 'codex "{{prompt}}"',
-                                  'ollama-cli': 'ollama run llama3 "{{prompt}}"',
-                                  'copilot-cli': 'gh copilot suggest "{{prompt}}"',
-                                  'cursor-cli': 'cursor --prompt "{{prompt}}"',
-                              };
-                              if (cliDefaults[provider]) {
-                                  updates.cliCommand = cliDefaults[provider];
+                              const cliTemplate = CLI_COMMAND_TEMPLATES[provider];
+                              if (cliTemplate) {
+                                  updates.cliCommand = cliTemplate;
                               } else {
                                   // Clear cliCommand when switching to non-CLI provider
                                   updates.cliCommand = undefined;
                               }
                               setEditingProfile({...editingProfile, ...updates});
+                              setCliValidationError(null);
                           }}
                           className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white focus:border-cyber-cyan focus:outline-none"
                       >
@@ -216,11 +232,17 @@ const TheConnections: React.FC<Props> = ({
                       <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
                       <input
                           value={editingProfile.cliCommand || ''}
-                          onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                          onChange={e => {
+                              setEditingProfile({...editingProfile, cliCommand: e.target.value});
+                              setCliValidationError(null);
+                          }}
                           placeholder='ollama run llama3 "{{prompt}}"'
                           className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                       />
                       <p className="text-[9px] text-gray-600 mt-1">Use {'{{prompt}}'} as placeholder for the message.</p>
+                      {cliValidationError && (
+                          <p className="text-[10px] text-red-400 mt-1">{cliValidationError}</p>
+                      )}
                   </div>
               )}
 
@@ -234,7 +256,10 @@ const TheConnections: React.FC<Props> = ({
                           <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
                           <input
                               value={editingProfile.cliCommand || 'claude -p "{{prompt}}"'}
-                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                          onChange={e => {
+                              setEditingProfile({...editingProfile, cliCommand: e.target.value});
+                              setCliValidationError(null);
+                          }}
                               placeholder='claude -p "{{prompt}}"'
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
@@ -252,7 +277,10 @@ const TheConnections: React.FC<Props> = ({
                           <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
                           <input
                               value={editingProfile.cliCommand || 'gemini "{{prompt}}"'}
-                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                          onChange={e => {
+                              setEditingProfile({...editingProfile, cliCommand: e.target.value});
+                              setCliValidationError(null);
+                          }}
                               placeholder='gemini "{{prompt}}"'
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
@@ -270,7 +298,10 @@ const TheConnections: React.FC<Props> = ({
                           <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
                           <input
                               value={editingProfile.cliCommand || 'codex "{{prompt}}"'}
-                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                          onChange={e => {
+                              setEditingProfile({...editingProfile, cliCommand: e.target.value});
+                              setCliValidationError(null);
+                          }}
                               placeholder='codex "{{prompt}}"'
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
@@ -288,7 +319,10 @@ const TheConnections: React.FC<Props> = ({
                           <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
                           <input
                               value={editingProfile.cliCommand || 'ollama run llama3 "{{prompt}}"'}
-                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                          onChange={e => {
+                              setEditingProfile({...editingProfile, cliCommand: e.target.value});
+                              setCliValidationError(null);
+                          }}
                               placeholder='ollama run llama3 "{{prompt}}"'
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
@@ -306,7 +340,10 @@ const TheConnections: React.FC<Props> = ({
                           <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
                           <input
                               value={editingProfile.cliCommand || 'gh copilot suggest "{{prompt}}"'}
-                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                          onChange={e => {
+                              setEditingProfile({...editingProfile, cliCommand: e.target.value});
+                              setCliValidationError(null);
+                          }}
                               placeholder='gh copilot suggest "{{prompt}}"'
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
@@ -324,7 +361,10 @@ const TheConnections: React.FC<Props> = ({
                           <label className="text-[10px] uppercase text-gray-500 block mb-1">Command Template</label>
                           <input
                               value={editingProfile.cliCommand || 'cursor --prompt "{{prompt}}"'}
-                              onChange={e => setEditingProfile({...editingProfile, cliCommand: e.target.value})}
+                          onChange={e => {
+                              setEditingProfile({...editingProfile, cliCommand: e.target.value});
+                              setCliValidationError(null);
+                          }}
                               placeholder='cursor --prompt "{{prompt}}"'
                               className="w-full bg-black border border-white/10 rounded p-2 text-xs text-white font-mono focus:border-cyber-cyan focus:outline-none"
                           />
@@ -332,6 +372,11 @@ const TheConnections: React.FC<Props> = ({
                   </div>
               )}
 
+              {requiresCliCommand(editingProfile.provider) && cliValidationError && (
+                  <div className="text-[10px] text-red-400 mb-2">
+                      {cliValidationError}
+                  </div>
+              )}
               <div>
                    <label className="text-[10px] uppercase text-gray-500 block mb-1">Model Identifier</label>
                    <input 

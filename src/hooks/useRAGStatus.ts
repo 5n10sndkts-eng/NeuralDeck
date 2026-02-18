@@ -62,7 +62,7 @@ interface UseRAGStatusReturn {
     triggerReindex: () => Promise<boolean>;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:3001/api';
 const POLL_INTERVAL = 5000; // 5 seconds
 
 export function useRAGStatus(): UseRAGStatusReturn {

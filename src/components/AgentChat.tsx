@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Send, AlertTriangle } from 'lucide-react';
 import { AgentProfile } from '../types';
 import { AGENT_DEFINITIONS, openAgentChat } from '../services/agent';
-import { getOpenCodeAgents, sendOpenCodePrompt } from '../services/api';
+import { getOpenCodeAgents, sendOpenCodePrompt, sendChat } from '../services/api';
+import { logger } from '@/services/logger';
 
 interface AgentChatMessage {
   id: string;
@@ -35,7 +37,7 @@ export function AgentChat({ isOpen, onClose, defaultAgent = 'architect' }: Agent
       try {
         const payload = await getOpenCodeAgents();
         const mapped = Object.entries(payload?.mappings || {})
-          .filter(([, value]: any) => value?.routing === 'opencode')
+          .filter(([, value]: [string, unknown]) => (value as { routing?: string })?.routing === 'opencode')
           .map(([id]) => id);
         setOpenCodeAgentList(mapped);
       } catch {
@@ -53,6 +55,9 @@ export function AgentChat({ isOpen, onClose, defaultAgent = 'architect' }: Agent
     return source.filter((id): id is AgentProfile => id in AGENT_DEFINITIONS);
   }, [openCodeAgentList]);
 
+  // Track conversation history for standard chat fallback
+  const chatHistoryRef = useRef<{ role: string; content: string }[]>([]);
+
   const submitPrompt = async () => {
     const prompt = input.trim();
     if (!prompt || isSending) return;
@@ -68,26 +73,62 @@ export function AgentChat({ isOpen, onClose, defaultAgent = 'architect' }: Agent
     setIsSending(true);
 
     try {
-      const context = openAgentChat(agentId, prompt);
-      const response = await sendOpenCodePrompt(agentId, context[context.length - 1].content, {
-        timeout: 120000
-      });
+      // Build conversation context
+      const context = openAgentChat(agentId, prompt, chatHistoryRef.current.length > 0
+        ? chatHistoryRef.current.map(m => ({ ...m, timestamp: Date.now() }))
+        : []);
+
+      // Track in history
+      chatHistoryRef.current.push({ role: 'user', content: prompt });
+
+      let assistantContent = '';
+      let meta: string | undefined;
+
+      // Try OpenCode route first, fall back to standard /api/chat
+      try {
+        const response = await sendOpenCodePrompt(agentId, context[context.length - 1].content, {
+          timeout: 30000
+        });
+
+        if (response?.success && response?.result?.content) {
+          assistantContent = response.result.content;
+          meta = response.result.fallbackUsed ? `via ${response.result.provider || 'opencode'}` : undefined;
+        } else {
+          throw new Error(response?.result?.content || 'Empty OpenCode response');
+        }
+      } catch (openCodeErr: unknown) {
+        logger.info('[AgentChat] OpenCode route failed, falling back to /api/chat:', openCodeErr instanceof Error ? openCodeErr.message : String(openCodeErr));
+
+        // Fallback: use standard sendChat with agent system prompt
+        const chatMessages = context.map(m => ({
+          role: m.role as 'system' | 'user' | 'assistant',
+          content: m.content,
+          timestamp: Date.now(),
+        }));
+
+        const chatResponse = await sendChat(chatMessages);
+        assistantContent = chatResponse?.content || '[No response from AI provider]';
+        meta = 'via standard chat API';
+      }
+
+      chatHistoryRef.current.push({ role: 'assistant', content: assistantContent });
 
       const assistantEntry: AgentChatMessage = {
         id: `a-${Date.now()}`,
         role: 'assistant',
-        content: response?.result?.content || '[No response]',
-        meta: response?.result?.fallbackUsed ? `Fallback: ${response?.result?.provider || 'local'}` : undefined
+        content: assistantContent,
+        meta
       };
 
       setMessages((prev) => [...prev, assistantEntry]);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       setMessages((prev) => [
         ...prev,
         {
           id: `e-${Date.now()}`,
           role: 'system',
-          content: `OpenCode request failed: ${error.message || 'Unknown error'}`
+          content: `Chat failed: ${message}. Check System > Connections for AI provider config.`
         }
       ]);
     } finally {
@@ -97,11 +138,12 @@ export function AgentChat({ isOpen, onClose, defaultAgent = 'architect' }: Agent
 
   if (!isOpen) return null;
 
-  return (
+  // Use portal to render at document.body level to escape parent overflow:hidden
+  return createPortal(
     <div style={{
       position: 'fixed',
       inset: 0,
-      zIndex: 120,
+      zIndex: 9998,
       background: 'rgba(2, 4, 10, 0.78)',
       backdropFilter: 'blur(4px)',
       display: 'flex',
@@ -264,6 +306,7 @@ export function AgentChat({ isOpen, onClose, defaultAgent = 'architect' }: Agent
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

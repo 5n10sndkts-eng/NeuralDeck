@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import {
     Activity, Hexagon, Terminal as TerminalIcon, Play, Square, Layout,
     KanbanSquare, Database, FlaskConical, Network, Server,
@@ -28,6 +28,7 @@ import TheCouncil from './components/TheCouncil';
 import CommandPalette from './components/CommandPalette';
 import { KeyboardHelp } from './components/KeyboardHelp';
 import { VisionDropZone } from './components/VisionDropZone';
+import { logger } from '@/services/logger';
 import { VisionPreview } from './components/VisionPreview';
 import { VoiceVisualizer } from './components/VoiceVisualizer';
 import { VoiceCommandHelp } from './components/VoiceCommandHelp';
@@ -55,6 +56,7 @@ import { authService } from './services/auth';
 import { AGENT_DEFINITIONS } from './services/agent';
 import { storageManager } from './services/storageManager';
 import { FileNode, ChatMessage, ConnectionProfile, ViewMode, AgentProfile } from './types';
+import { CLI_COMMAND_TEMPLATES, CLI_PROVIDERS } from './constants';
 
 const AppContent: React.FC = () => {
     // --- AUTH INITIALIZATION - Story 6-4 ---
@@ -121,14 +123,43 @@ const AppContent: React.FC = () => {
         }
     };
 
+    const normalizeProfiles = (input: ConnectionProfile[]): ConnectionProfile[] => {
+        return input.map(profile => {
+            let next = profile;
+            if (
+                profile.id === 'default' &&
+                profile.name === 'Local OpenAI' &&
+                profile.provider === 'openai' &&
+                profile.baseUrl === 'http://localhost:8000'
+            ) {
+                next = {
+                    ...profile,
+                    name: 'Mock (Local)',
+                    provider: 'mock',
+                    model: 'mock',
+                    baseUrl: undefined,
+                    apiKey: undefined,
+                    cliCommand: undefined
+                };
+            }
+
+            if (CLI_PROVIDERS.includes(next.provider)) {
+                const template = CLI_COMMAND_TEMPLATES[next.provider];
+                if (!next.cliCommand && template) {
+                    return { ...next, cliCommand: template };
+                }
+            }
+            return next;
+        });
+    };
+
     const [profiles, setProfiles] = useState<ConnectionProfile[]>(() =>
-        safeJsonParse('neural_profiles', [{
+        normalizeProfiles(safeJsonParse('neural_profiles', [{
             id: 'default',
-            name: 'Local OpenAI',
-            provider: 'openai',
-            model: 'openai/gpt-oss-20b',
-            baseUrl: 'http://localhost:8000'
-        }])
+            name: 'Mock (Local)',
+            provider: 'mock',
+            model: 'mock'
+        }]))
     );
 
     const [activeProfileId, setActiveProfileId] = useState(() => localStorage.getItem('neural_active_profile') || 'default');
@@ -145,7 +176,14 @@ const AppContent: React.FC = () => {
     const [showVoiceHelp, setShowVoiceHelp] = useState(false);
 
     // Persistence Effects
-    useEffect(() => { localStorage.setItem('neural_profiles', JSON.stringify(profiles)); }, [profiles]);
+    useEffect(() => {
+        const normalized = normalizeProfiles(profiles);
+        if (JSON.stringify(normalized) !== JSON.stringify(profiles)) {
+            setProfiles(normalized);
+            return;
+        }
+        localStorage.setItem('neural_profiles', JSON.stringify(profiles));
+    }, [profiles]);
     useEffect(() => { localStorage.setItem('neural_active_profile', activeProfileId); }, [activeProfileId]);
     useEffect(() => { localStorage.setItem('neural_routing', JSON.stringify(agentRouting)); }, [agentRouting]);
 
@@ -247,31 +285,18 @@ const AppContent: React.FC = () => {
     // --- AUTONOMY HOOK ---
     const activeConfig = profiles.find(p => p.id === activeProfileId) || profiles[0];
 
-    const loadFiles = async (background = false) => {
+    const loadFiles = useCallback(async () => {
         // Files are now managed by WorkspaceContext
         await refreshFiles();
-    };
+    }, [refreshFiles]);
 
     // --- STATE & DATA ---
-    // MIGRATION: Replaced useNeuralAutonomy (Client-Side) with useSocket (Server-Side Cortex)
-    // const { phase, logs, activeAgents, isAutoMode, toggleAuto, currentThought } = useSocket(); // This line was moved to the top
-
-    // --- AUDIO ENGINE SYNC ---
-    // Sync activeAgents from Socket to UI Context
-    useEffect(() => {
-        if (activeAgents) {
-            setUIImplActiveAgents(activeAgents);
-        }
-    }, [activeAgents, setUIImplActiveAgents]);
-
-    // --- LAYOUT ---
-    // --- INITIALIZATION ---
     // --- INITIALIZATION ---
     useEffect(() => {
         loadFiles();
-        const interval = setInterval(() => loadFiles(true), 5000); // Poll FS silently
+        const interval = setInterval(() => loadFiles(), 5000); // Poll FS silently
         return () => clearInterval(interval);
-    }, []);
+    }, [loadFiles]);
 
     // Show workspace manager on first run if no workspace selected
     useEffect(() => {
@@ -508,6 +533,7 @@ const AppContent: React.FC = () => {
         let imported = 0;
         let skipped = 0;
         let failed = 0;
+        let tooLarge = 0;
 
         for (const file of filesToImport) {
             const rawRel =
@@ -522,6 +548,15 @@ const AppContent: React.FC = () => {
             }
             if (shouldSkipImportPath(relPath)) {
                 skipped++;
+                continue;
+            }
+
+            // Guard: skip files too large for base64 transport (7MB raw ≈ 10MB encoded)
+            const MAX_IMPORT_FILE_SIZE = 7 * 1024 * 1024;
+            if (file.size > MAX_IMPORT_FILE_SIZE) {
+                tooLarge++;
+                skipped++;
+                logger.warn(`[IMPORT] Skipped (too large: ${(file.size / 1024 / 1024).toFixed(1)}MB): ${relPath}`);
                 continue;
             }
 
@@ -551,7 +586,7 @@ const AppContent: React.FC = () => {
 
         await addMessage({
             role: 'system',
-            content: `[IMPORT] Complete. Imported: ${imported}. Skipped: ${skipped}. Failed: ${failed}.`,
+            content: `[IMPORT] Complete. Imported: ${imported}. Skipped: ${skipped}${tooLarge > 0 ? ` (${tooLarge} too large)` : ''}. Failed: ${failed}.`,
             timestamp: Date.now()
         });
     };
@@ -571,7 +606,7 @@ const AppContent: React.FC = () => {
                         }} />
 
                         {/* File Explorer - Left sidebar */}
-                        <div className="w-72 min-w-[260px] max-w-[300px] flex-shrink-0 flex flex-col relative z-10 overflow-hidden" style={{
+                        <div className="w-72 min-w-[260px] max-w-[300px] flex-shrink-0 flex flex-col relative z-10 overflow-visible" style={{
                             background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.92) 0%, rgba(5, 5, 14, 0.96) 100%)',
                             border: '1px solid rgba(0, 240, 255, 0.18)',
                             borderRadius: '10px',
@@ -651,9 +686,9 @@ const AppContent: React.FC = () => {
 		                                    </button>
 
 		                                    {showWorkspaceMenu && (
-		                                        <div
-		                                            role="menu"
-		                                            className="absolute left-0 right-0 mt-2 overflow-hidden"
+                                    <div
+                                        role="menu"
+                                        className="absolute left-0 right-0 mt-2 overflow-visible"
 		                                            style={{
 		                                                background: 'linear-gradient(135deg, rgba(10, 10, 22, 0.98) 0%, rgba(5, 5, 14, 0.99) 100%)',
 		                                                border: '1px solid rgba(0, 240, 255, 0.28)',

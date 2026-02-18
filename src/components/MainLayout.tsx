@@ -76,17 +76,22 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ sidebar, header, childre
                 </div>
             </div>
 
-            <div className="flex overflow-hidden relative z-40" style={{ height: 'calc(100vh - 4.5rem)' }}>
-                {/* LEFT DOCK SLOT */}
-                {sidebar}
+            <div className="flex overflow-hidden relative" style={{ height: 'calc(100vh - 4.5rem)' }}>
+                {/* LEFT DOCK SLOT - higher z-index so main content never intercepts sidebar clicks */}
+                <div className="relative" style={{ zIndex: 50 }}>
+                    {sidebar}
+                </div>
 
                 {/* MAIN VIEWPORT - Enhanced */}
-                <main className="flex-1 relative overflow-hidden">
-                    {/* Premium Scanline Effect */}
-                    <div className="absolute inset-0 pointer-events-none z-[100] opacity-20" style={{
+                <main className="flex-1 relative overflow-hidden" style={{ zIndex: 1 }}>
+                    {/* Premium Scanline Effect - low z-index, purely decorative */}
+                    <div className="absolute inset-0 pointer-events-none opacity-20" style={{
+                        zIndex: 0,
                         background: 'repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0, 240, 255, 0.03) 2px, rgba(0, 240, 255, 0.03) 4px)'
                     }} />
-                    {children}
+                    <div className="relative" style={{ zIndex: 1 }}>
+                        {children}
+                    </div>
                 </main>
             </div>
         </div>

@@ -15,6 +15,7 @@ import { logger } from '@/services/logger';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { AgentProfile, FileNode, AgentNodeData, AgentNodeState, NeuralPhase, ToolHistoryEntry } from '../types';
+import { MAX_DEVELOPER_NODES } from '../constants';
 import { useSocket } from '../hooks/useSocket';
 import { usePacketSystem } from '../hooks/usePacketSystem';
 import { useToolExecution } from '../hooks/useToolExecution';
@@ -40,6 +41,12 @@ dagreGraph.setDefaultEdgeLabel(() => ({}));
 const nodeWidth = 160;
 const nodeHeight = 80;
 
+// Defined outside component to avoid React Flow warning #002
+const nodeTypes: NodeTypes = {
+    agentNode: AgentNode,
+    developerNode: DeveloperNode,
+};
+
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
     const isHorizontal = direction === 'LR';
     dagreGraph.setGraph({ rankdir: direction, nodesep: 80, ranksep: 100 });
@@ -54,21 +61,20 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
 
     dagre.layout(dagreGraph);
 
-    nodes.forEach((node) => {
+    const layoutedNodes = nodes.map((node) => {
         const nodeWithPosition = dagreGraph.node(node.id);
-        node.targetPosition = isHorizontal ? Position.Left : Position.Top;
-        node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
-
-        // Shift to center
-        node.position = {
-            x: nodeWithPosition.x - nodeWidth / 2,
-            y: nodeWithPosition.y - nodeHeight / 2,
+        return {
+            ...node,
+            targetPosition: isHorizontal ? Position.Left : Position.Top,
+            sourcePosition: isHorizontal ? Position.Right : Position.Bottom,
+            position: {
+                x: nodeWithPosition.x - nodeWidth / 2,
+                y: nodeWithPosition.y - nodeHeight / 2,
+            },
         };
-
-        return node;
     });
 
-    return { nodes, edges };
+    return { nodes: layoutedNodes, edges };
 };
 
 // Define all 8 agent nodes
@@ -231,11 +237,7 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
     const [showExecutionPanel, setShowExecutionPanel] = useState(false);
     const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
 
-    // Custom node types (Story 4-1: Added developerNode)
-    const nodeTypes: NodeTypes = useMemo(() => ({
-        agentNode: AgentNode,
-        developerNode: DeveloperNode,
-    }), []);
+    // nodeTypes defined outside component (module-level) to avoid React Flow warning #002
 
     // Story Watcher for detecting new story files (Story 4-1)
     const {
@@ -299,10 +301,14 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
     useEffect(() => {
         if (!stories.length) return;
 
-        // Spawn developer nodes for pending stories
+        // Spawn developer nodes for pending stories - cap to prevent performance issues
         const pendingStories = getPendingStories();
         if (pendingStories.length > 0) {
-            const spawnedIds = spawnDeveloperNodesFromStories(pendingStories);
+            const storiesToSpawn = pendingStories.slice(0, MAX_DEVELOPER_NODES);
+            if (pendingStories.length > MAX_DEVELOPER_NODES) {
+                logger.warn(`[NeuralGrid] ${pendingStories.length} pending stories found, capping at ${MAX_DEVELOPER_NODES} developer nodes`);
+            }
+            const spawnedIds = spawnDeveloperNodesFromStories(storiesToSpawn);
             if (spawnedIds.length > 0) {
                 logger.info(`[NeuralGrid] Spawned ${spawnedIds.length} developer nodes for pending stories`);
             }
@@ -490,7 +496,7 @@ const NeuralGrid: React.FC<NeuralGridProps> = ({ phase, activeAgents, files }) =
     );
 
     return (
-        <div className="w-full h-full bg-[#050505]" data-testid="neural-grid">
+        <div className="w-full h-full min-h-[400px] bg-[#050505]" style={{ width: '100%', height: '100%' }} data-testid="neural-grid">
             <ReactFlow
                 nodes={nodes}
                 edges={edges}

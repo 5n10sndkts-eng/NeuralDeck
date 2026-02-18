@@ -89,14 +89,16 @@ class CodebaseIndexerService extends EventEmitter {
         this.logger.info('[INDEXER] Initializing codebase indexer...');
 
         try {
-            // Start initial indexing
-            await this.indexWorkspace();
+            // Start initial indexing in background (non-blocking) - Story 10 Fix
+            this.indexWorkspace().catch(err => {
+                this.logger.error(`[INDEXER] Background indexing failed: ${err.message}`);
+            });
 
             // Task 3.1: Subscribe to file watcher
             this.subscribeToFileWatcher();
 
             this.isInitialized = true;
-            this.logger.info('[INDEXER] Codebase indexer initialized successfully');
+            this.logger.info('[INDEXER] Codebase indexer initialized (indexing in background)');
 
         } catch (error) {
             this.logger.error(`[INDEXER] Failed to initialize: ${error.message}`);

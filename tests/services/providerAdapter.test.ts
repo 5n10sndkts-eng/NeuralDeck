@@ -1,4 +1,4 @@
-import fsPromises from 'fs/promises';
+import * as fsPromises from 'fs/promises';
 
 jest.mock('../../server/services/opencodeCLI.cjs', () => ({
   sendToNeuralDeckAgent: jest.fn()

@@ -2,19 +2,11 @@
 // Executes before all tests
 import '@testing-library/jest-dom';
 
-// Mock import.meta.env for Vite environment variables
-Object.defineProperty(globalThis, 'import', {
-  value: {
-    meta: {
-      env: {
-        VITE_API_BASE: 'http://localhost:3001/api',
-        VITE_SOCKET_URL: 'http://localhost:3001',
-      }
-    }
-  },
-  writable: true,
-  configurable: true,
-});
+// Vite env vars: the custom transform (tests/transforms/vite-env.cjs) rewrites
+// import.meta.env → process.env, so set the values Jest needs here.
+process.env.VITE_API_BASE = 'http://localhost:3001/api';
+process.env.VITE_SOCKET_URL = 'http://localhost:3001';
+process.env.VITE_OPENCODE_URL = 'http://localhost:4096';
 
 // Track console errors for test validation
 (global as any).__consoleErrors = [];

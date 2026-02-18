@@ -55,18 +55,18 @@ interface ConversationContextType {
   messages: ChatMessage[];
   isLoading: boolean;
   storageType: StorageType;
-  
+
   // Actions
   loadSession: (sessionId: string) => Promise<void>;
   switchSession: (sessionId: string) => Promise<void>;
-  newSession: (title?: string) => Promise<void>;
+  newSession: (title?: string) => Promise<string | null>;
   addMessage: (message: ChatMessage) => Promise<void>;
   renameSession: (sessionId: string, newTitle: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
   exportSession: (sessionId: string) => Promise<void>;
   clearCurrentSession: () => Promise<void>;
   refreshSessions: () => Promise<void>;
-  
+
   // Storage info
   getStorageUsage: () => Promise<{ used: number; quota: number }>;
   cleanupOldSessions: (retentionDays?: number) => Promise<number>;
@@ -76,7 +76,7 @@ const ConversationContext = createContext<ConversationContextType | undefined>(u
 
 export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const storage = useConversationStorage();
-  
+
   const [state, dispatch] = useReducer(conversationReducer, {
     currentSessionId: null,
     sessions: [],
@@ -90,45 +90,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     dispatch({ type: 'SET_STORAGE_TYPE', payload: storage.storageType });
   }, [storage.storageType]);
 
-  // Initialize: Load sessions and restore last active session
-  useEffect(() => {
-    const init = async () => {
-      if (!storage.isAvailable) {
-        logger.warn('[Conversation] Storage not available');
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return;
-      }
-
-      try {
-        dispatch({ type: 'SET_LOADING', payload: true });
-        
-        // Load all sessions
-        const sessions = await storage.listSessions();
-        dispatch({ type: 'SET_SESSIONS', payload: sessions });
-
-        // Restore last active session
-        const lastSessionId = localStorage.getItem(LAST_SESSION_KEY);
-        
-        if (lastSessionId && sessions.some(s => s.id === lastSessionId)) {
-          await loadSession(lastSessionId);
-        } else if (sessions.length > 0) {
-          // Load most recent session
-          await loadSession(sessions[0].id);
-        } else {
-          // Create first session
-          await newSession('Welcome Session');
-        }
-      } catch (error) {
-        logger.error('[Conversation] Initialization error:', error);
-      } finally {
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
-    };
-
-    init();
-  }, [storage.isAvailable]);
-
-  // Load a specific session's messages
+  // Load a specific session's messages (defined before init effect)
   const loadSession = useCallback(async (sessionId: string) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -143,13 +105,6 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [storage]);
-
-  // Switch to a different session
-  const switchSession = useCallback(async (sessionId: string) => {
-    await loadSession(sessionId);
-    const sessions = await storage.listSessions();
-    dispatch({ type: 'SET_SESSIONS', payload: sessions });
-  }, [loadSession, storage]);
 
   // Create a new session — returns the session ID on success, or null on failure
   const newSession = useCallback(async (title?: string): Promise<string | null> => {
@@ -167,6 +122,53 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return null;
     }
   }, [storage]);
+
+  // Initialize: Load sessions and restore last active session
+  // Only runs when storage becomes available — skips the initial false state entirely
+  // Initialize: Load sessions and restore last active session
+  // Only runs when storage becomes available — skips the initial false state entirely
+  const isInitializedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!storage.isAvailable || isInitializedRef.current) return;
+
+    const init = async () => {
+      try {
+        isInitializedRef.current = true; // Mark as initialized immediately
+        dispatch({ type: 'SET_LOADING', payload: true });
+
+        const sessions = await storage.listSessions();
+        dispatch({ type: 'SET_SESSIONS', payload: sessions });
+
+        const lastSessionId = localStorage.getItem(LAST_SESSION_KEY);
+
+        if (lastSessionId && sessions.some(s => s.id === lastSessionId)) {
+          await loadSession(lastSessionId);
+        } else if (sessions.length > 0) {
+          await loadSession(sessions[0].id);
+        } else {
+          // Verify we don't already have one before creating
+          if (sessions.length === 0) {
+            await newSession('Welcome Session');
+          }
+        }
+      } catch (error) {
+        logger.error('[Conversation] Initialization error:', error);
+        isInitializedRef.current = false; // Reset on error to allow retry
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
+    };
+
+    init();
+  }, [storage.isAvailable, loadSession, newSession, storage]);
+
+  // Switch to a different session
+  const switchSession = useCallback(async (sessionId: string) => {
+    await loadSession(sessionId);
+    const sessions = await storage.listSessions();
+    dispatch({ type: 'SET_SESSIONS', payload: sessions });
+  }, [loadSession, storage]);
 
   // Add a message to current session
   const addMessage = useCallback(async (message: ChatMessage) => {
@@ -212,7 +214,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       await storage.deleteSession(sessionId);
       const sessions = await storage.listSessions();
       dispatch({ type: 'SET_SESSIONS', payload: sessions });
-      
+
       // If we deleted the current session, switch to another
       if (state.currentSessionId === sessionId) {
         if (sessions.length > 0) {
@@ -231,7 +233,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const session = await storage.getSession(sessionId);
       const messages = await storage.getMessages(sessionId);
-      
+
       const exportData = {
         session,
         messages,
@@ -248,7 +250,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       logger.info('[Conversation] Session exported:', sessionId);
     } catch (error) {
       logger.error('[Conversation] Error exporting session:', error);
@@ -258,11 +260,11 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Clear messages in current session
   const clearCurrentSession = useCallback(async () => {
     if (!state.currentSessionId) return;
-    
+
     try {
       await storage.clearMessages(state.currentSessionId);
       dispatch({ type: 'SET_MESSAGES', payload: [] });
-      
+
       // Update session in list
       const updatedSession = await storage.getSession(state.currentSessionId);
       if (updatedSession) {
@@ -300,7 +302,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     messages: state.messages,
     isLoading: state.isLoading,
     storageType: state.storageType,
-    
+
     // Actions
     loadSession,
     switchSession,
@@ -311,7 +313,7 @@ export const ConversationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     exportSession,
     clearCurrentSession,
     refreshSessions,
-    
+
     // Storage info
     getStorageUsage,
     cleanupOldSessions

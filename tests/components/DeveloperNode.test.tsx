@@ -9,11 +9,19 @@ import { ReactFlowProvider } from 'reactflow';
 import DeveloperNode, { DeveloperNodeData } from '../../src/components/DeveloperNode';
 
 // Mock framer-motion to avoid animation issues in tests
-jest.mock('framer-motion', () => ({
+jest.mock('framer-motion', () => {
+  const MOTION_PROPS = ['layoutId', 'whileHover', 'whileTap', 'initial', 'animate', 'exit', 'transition', 'layout', 'variants'];
+  const filter = (p: any) => {
+    const filtered = { ...p };
+    MOTION_PROPS.forEach((k) => delete filtered[k]);
+    return filtered;
+  };
+  return {
     motion: {
-        div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+      div: ({ children, ...props }: any) => <div {...filter(props)}>{children}</div>,
     },
-}));
+  };
+});
 
 // Mock ToolExecutionIndicator
 jest.mock('../../src/components/ToolExecutionIndicator', () => ({

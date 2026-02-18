@@ -6,6 +6,7 @@ import { triggerThink, Thought } from '../services/api';
 import { getSwarmIntegrationService, type SwarmStatusUpdate } from '../services/swarmIntegration';
 import type { SwarmTopology, TopologyConfig, ExecutionBatch } from '../core/swarm/topology';
 import { logger } from '@/services/logger';
+import { MAX_DEVELOPER_NODES } from '../constants';
 
 export interface SwarmNode {
     id: string;
@@ -72,18 +73,10 @@ export const useSwarm = () => {
         };
 
         setNodes(prev => {
-            // Avoid duplicates if log ID exists (if logs had IDs)
-            // For now, simple append limit
             const start = [newNode, ...prev].slice(0, 50); // Keep last 50
+            const oldFirst = prev[0];
+            setEdges(eds => oldFirst ? [...eds, { source: oldFirst.id, target: newNode.id }] : eds);
             return start;
-        });
-
-        // Create simple linear edge for now
-        setEdges(prev => {
-            if (nodes.length > 0) {
-                return [...prev, { source: nodes[0].id, target: newNode.id }];
-            }
-            return prev;
         });
 
     }, [logs, activeAgents, phase]); // Re-run when logs change
@@ -190,11 +183,15 @@ export const useSwarm = () => {
         const startTime = Date.now();
         const nodeIds: string[] = [];
 
-        stories.forEach(story => {
+        const storiesToProcess = stories.slice(0, MAX_DEVELOPER_NODES);
+        if (stories.length > MAX_DEVELOPER_NODES) {
+            logger.warn(`[useSwarm] Capping developer nodes at ${MAX_DEVELOPER_NODES} (${stories.length} stories requested)`);
+        }
+
+        storiesToProcess.forEach(story => {
             // Skip if already has a developer node
             if (storyToDevMap.has(story.id)) {
-                logger.info(`[useSwarm] Developer node already exists for story: ${story.id}`);
-                return;
+                return; // Silently skip - no need to log for each existing node
             }
 
             const nodeId = addDeveloperNode(story);
@@ -202,7 +199,9 @@ export const useSwarm = () => {
         });
 
         const duration = Date.now() - startTime;
-        logger.info(`[useSwarm] Spawned ${nodeIds.length} developer nodes in ${duration}ms`);
+        if (nodeIds.length > 0) {
+            logger.info(`[useSwarm] Spawned ${nodeIds.length} developer nodes in ${duration}ms`);
+        }
 
         // Performance warning if over 2 second target
         if (duration > 2000) {
