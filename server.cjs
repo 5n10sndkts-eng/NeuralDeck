@@ -31,8 +31,8 @@ const jwt = safeRequire('jsonwebtoken');
 const crypto = require('crypto');
 
 // --- PRODUCTION SECURITY GATE ---
-// In production, missing security modules are fatal. In dev, warn only.
-if (process.env.NODE_ENV === 'production') {
+// Outside development, missing security modules are fatal. In dev, warn only.
+if (process.env.NODE_ENV !== 'development') {
     const required = { helmet, cors, rateLimit, csrf, cookie, jwt };
     const missing = Object.entries(required).filter(([, mod]) => !mod).map(([name]) => name);
     if (missing.length > 0) {
@@ -1351,10 +1351,7 @@ async function start() {
     // File System: Read
     // Handle GET /api/read gracefully - the endpoint is POST-only
     fastify.get('/api/read', async (request, reply) => {
-        return reply.code(405).send({
-            error: 'Method Not Allowed. Use POST /api/read with { filePath, workspaceId } body.',
-            method: 'POST'
-        });
+        return reply.code(405).send({ error: 'Method Not Allowed' });
     });
 
     fastify.post('/api/read', { preHandler: verifyToken }, async (request, reply) => {
@@ -2868,7 +2865,6 @@ async function start() {
         fileWatcher.subscribe((event) => {
             fastify.log.info(`[FILE_CHANGE] ${event.eventType}: ${event.relativePath}`);
             broadcast('file:changed', {
-                filePath: event.filePath,
                 relativePath: event.relativePath,
                 eventType: event.eventType,
                 timestamp: event.timestamp

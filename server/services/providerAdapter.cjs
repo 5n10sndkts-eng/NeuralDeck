@@ -32,7 +32,7 @@ const EXTENDED_PATH = [
 
 const execOptions = {
   env: { ...process.env, PATH: EXTENDED_PATH },
-  maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+  maxBuffer: 2 * 1024 * 1024 // 2MB buffer – sufficient for CLI responses
 };
 
 class ProviderAdapter {

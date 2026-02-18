@@ -18,7 +18,12 @@ export const CLI_PROVIDERS: LlmProvider[] = [
     'cursor-cli'
 ];
 
-/** Default command templates for CLI providers ({{prompt}} placeholder is required). */
+/**
+ * CLI command templates for display/reference only.
+ * WARNING: These templates must NOT be used with shell string interpolation.
+ * All CLI execution uses execFile() with argument arrays in providerAdapter.cjs.
+ * @deprecated Use execFile argument arrays in providerAdapter.cjs instead
+ */
 export const CLI_COMMAND_TEMPLATES: Partial<Record<LlmProvider, string>> = {
     'cli': 'ollama run llama3 "{{prompt}}"',
     'claude-cli': 'claude -p "{{prompt}}"',

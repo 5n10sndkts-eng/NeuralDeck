@@ -73,16 +73,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } else {
         setFiles([]);
       }
+      setIsLoading(false);
     } catch (err: unknown) {
       logger.error('[WORKSPACE] Failed to load workspaces:', err);
-      // Retry once after a short delay (auth may not be ready on mount)
+      // Retry after a short delay (auth may not be ready on mount)
       if (attempt < 2) {
         logger.info(`[WORKSPACE] Retrying workspace load (attempt ${attempt + 1})...`);
         setTimeout(() => refreshWorkspaces(attempt + 1), 1000);
         return;
       }
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
       setIsLoading(false);
     }
   }, []);

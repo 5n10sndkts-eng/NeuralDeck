@@ -177,11 +177,6 @@ const AppContent: React.FC = () => {
 
     // Persistence Effects
     useEffect(() => {
-        const normalized = normalizeProfiles(profiles);
-        if (JSON.stringify(normalized) !== JSON.stringify(profiles)) {
-            setProfiles(normalized);
-            return;
-        }
         localStorage.setItem('neural_profiles', JSON.stringify(profiles));
     }, [profiles]);
     useEffect(() => { localStorage.setItem('neural_active_profile', activeProfileId); }, [activeProfileId]);
@@ -538,6 +533,9 @@ const AppContent: React.FC = () => {
         let failed = 0;
         let tooLarge = 0;
 
+        // Guard: skip files too large for base64 transport (7MB raw ~ 10MB encoded)
+        const MAX_IMPORT_FILE_SIZE = 7 * 1024 * 1024;
+
         for (const file of filesToImport) {
             const rawRel =
                 mode === 'folder'
@@ -554,8 +552,6 @@ const AppContent: React.FC = () => {
                 continue;
             }
 
-            // Guard: skip files too large for base64 transport (7MB raw ≈ 10MB encoded)
-            const MAX_IMPORT_FILE_SIZE = 7 * 1024 * 1024;
             if (file.size > MAX_IMPORT_FILE_SIZE) {
                 tooLarge++;
                 skipped++;
@@ -911,7 +907,7 @@ const AppContent: React.FC = () => {
                                 profiles={profiles} 
                                 agentRouting={agentRouting} 
                                 activeProfileId={activeProfileId} 
-                                onUpdateProfiles={setProfiles} 
+                                onUpdateProfiles={(p: ConnectionProfile[]) => setProfiles(normalizeProfiles(p))}
                                 onUpdateRouting={setAgentRouting} 
                                 onUpdateActiveProfile={setActiveProfileId} 
                             />
